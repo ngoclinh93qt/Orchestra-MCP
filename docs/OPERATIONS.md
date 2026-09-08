@@ -110,3 +110,9 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://mcp.markapidown.net/mcp
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 # ^ expect 401: unauthenticated tool calls must be rejected, even over the tunnel.
 ```
+
+The bridge now exposes eleven tools (previously six): the original
+`agent_start`/`agent_list`/`agent_status`/`agent_output`/`agent_continue`/
+`agent_cancel`, plus five read-only context tools — `repo_list`, `repo_read`,
+`repo_search`, `session_list`, `session_read`. A successful authenticated
+`tools/list` call returns all eleven.

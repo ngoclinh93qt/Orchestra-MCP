@@ -6,11 +6,13 @@ description: Use the private Agent Bridge MCP connector to start, watch, continu
 # Agent Bridge
 
 This connector controls two local coding agents — Codex CLI and Claude Code —
-running on one specific Mac, through six tools: `agent_start`, `agent_list`,
-`agent_status`, `agent_output`, `agent_continue`, `agent_cancel`. There is no
-shell tool, no arbitrary executable, and no sandbox-bypass flag anywhere
-behind this connector: every task runs under the provider's own normal
-sandboxing or permission controls.
+running on one specific Mac, through eleven tools: the six task-control tools
+`agent_start`, `agent_list`, `agent_status`, `agent_output`, `agent_continue`,
+`agent_cancel`, plus five read-only context tools (`repo_list`, `repo_read`,
+`repo_search`, `session_list`, `session_read` — see "Reading context
+directly" below). There is no shell tool, no arbitrary executable, and no
+sandbox-bypass flag anywhere behind this connector: every task runs under the
+provider's own normal sandboxing or permission controls.
 
 ## Before starting anything
 
@@ -38,6 +40,24 @@ sandboxing or permission controls.
   `interrupted` means the bridge restarted while the task was active; it is
   not the same as a normal failure and does not have a provider session to
   resume in every case — check `hasProviderSession` on the status summary.
+
+## Reading context directly
+
+Before starting a task, or whenever more context would help, read the
+repository or prior session history directly instead of guessing:
+
+- `repo_list` / `repo_read` / `repo_search` — browse and read files inside an
+  allowlisted root. `.git`, `node_modules`, `.env*`, and build/cache
+  directories are never shown or readable.
+- `session_list` / `session_read` — see and read Claude Code/Codex sessions
+  that were run directly in a terminal, not through this connector, but only
+  ones whose working directory is inside an allowlisted root. The
+  `lastEventHint` and `lastModifiedAt` fields on a session are best-effort
+  signals, not a reliable finished/not-finished status — for that, use
+  `agent_start`/`agent_continue` and `agent_status` instead.
+
+None of these five tools require approval; none of them can write, delete,
+or move anything.
 
 ## Continuing and cancelling
 
