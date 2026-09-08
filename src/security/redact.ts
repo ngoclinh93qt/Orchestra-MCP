@@ -15,11 +15,9 @@ export function redactJsonValue(value: unknown): unknown {
 }
 
 const SECRET_LINE_PATTERN =
-  /\b([\w.-]*(?:token|secret|password|api[_-]?key|authorization|cookie)[\w.-]*)(\s*[:=]\s*)(['"]?)([^'"\s]+)(['"]?)/gi;
+  /\b([\w.-]*(?:token|secret|password|api[_-]?key|authorization|cookie)[\w.-]*)(\s*[:=]{1}(?!=)\s*)(["'])((?:(?!\3).)+)\3/gi;
 
 /** Best-effort redaction of an assignment-shaped secret in one line of arbitrary text. */
 export function redactTextLine(line: string): string {
-  return line.replace(SECRET_LINE_PATTERN, (_match, key, sep, openQuote, _value, closeQuote) => {
-    return `${key}${sep}${openQuote}${REDACTED}${closeQuote}`;
-  });
+  return line.replace(SECRET_LINE_PATTERN, (_match, key, sep, quote) => `${key}${sep}${quote}${REDACTED}${quote}`);
 }
