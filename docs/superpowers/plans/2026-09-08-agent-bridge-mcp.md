@@ -80,7 +80,7 @@ Commit: `build: scaffold agent bridge service`
 **Interfaces:**
 - Produces: `BridgeTask`, `TaskState`, `TaskStore`, `EventLog`, `OutputPage`
 
-- [ ] **Step 1: Write failing store tests**
+- [x] **Step 1: Write failing store tests**
 
 Cover creation, legal transitions, parent links, session IDs, filtering, WAL, and restart reconciliation:
 
@@ -90,15 +90,15 @@ store.transition(task.id, "running"); store.reconcileAfterRestart();
 expect(store.get(task.id)?.state).toBe("interrupted");
 ```
 
-- [ ] **Step 2: Confirm red**
+- [x] **Step 2: Confirm red**
 
 Run: `npm test -- test/task-store.test.ts`
 
-- [ ] **Step 3: Implement task schema/state machine**
+- [x] **Step 3: Implement task schema/state machine**
 
 Use `queued | running | waiting | succeeded | failed | cancelled | interrupted`. Store prompt byte count, never prompt text. Make cancellation idempotent and migrations transactional.
 
-- [ ] **Step 4: Write failing JSONL cursor/redaction tests**
+- [x] **Step 4: Write failing JSONL cursor/redaction tests**
 
 ```ts
 log.append(id, {type: "assistant", text: "one"});
@@ -107,7 +107,7 @@ expect(log.read(id, {cursor: 0, limit: 1}).nextCursor).toBe(1);
 
 Assert keys named token, authorization, api_key, and cookie are `[REDACTED]`; limits are capped and newest events survive rotation.
 
-- [ ] **Step 5: Implement owner-only append logs and verify**
+- [x] **Step 5: Implement owner-only append logs and verify**
 
 Run: `npm test -- test/task-store.test.ts test/event-log.test.ts`
 

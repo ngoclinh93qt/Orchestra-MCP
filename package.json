@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -18,10 +20,11 @@
     "zod": "4.5.4"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/express": "^5.0.0",
     "@types/node": "^24.0.0",
-    "typescript": "7.0.2",
     "tsx": "4.23.13",
+    "typescript": "7.0.2",
     "vitest": "4.1.11"
   }
 }
