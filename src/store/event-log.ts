@@ -1,5 +1,6 @@
 import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { redactJsonValue } from "../security/redact.js";
 
 export type ProviderEvent = Readonly<Record<string, unknown>>;
 
@@ -11,21 +12,6 @@ export interface OutputPage {
 export interface EventLogOptions {
   /** Maximum events retained per task log; oldest events are dropped once exceeded. */
   readonly maxEventsPerTask?: number;
-}
-
-const REDACTED_KEYS = new Set(["token", "authorization", "api_key", "cookie"]);
-const REDACTED = "[REDACTED]";
-
-function redact(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(redact);
-  if (value && typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = REDACTED_KEYS.has(key.toLowerCase()) ? REDACTED : redact(inner);
-    }
-    return out;
-  }
-  return value;
 }
 
 /**
@@ -55,7 +41,7 @@ export class EventLog {
 
   append(taskId: string, event: ProviderEvent): void {
     const path = this.pathFor(taskId);
-    const sanitized = redact(event);
+    const sanitized = redactJsonValue(event);
     const isNew = !existsSync(path);
     appendFileSync(path, `${JSON.stringify(sanitized)}\n`, { mode: 0o600 });
     if (isNew) chmodSync(path, 0o600);
