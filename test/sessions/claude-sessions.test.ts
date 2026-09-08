@@ -47,4 +47,50 @@ describe("readClaudeSession", () => {
     expect(page.events).toEqual([{ type: "assistant", cwd: "/Users/thief/nik/demo", sessionId: "session-1", token: "[REDACTED]" }]);
     expect(page.nextCursor).toBe(3);
   });
+
+  it("tolerates malformed JSON lines with diagnostic markers", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "claude-projects-malformed-"));
+    const projectDir = join(baseDir, "-Users-thief-nik-demo");
+    await mkdir(projectDir, { recursive: true });
+    const lines = [
+      JSON.stringify({ type: "system", cwd: "/Users/thief/nik/demo", sessionId: "session-with-malformed", timestamp: "2026-09-01T00:00:00Z" }),
+      JSON.stringify({ type: "user", cwd: "/Users/thief/nik/demo", sessionId: "session-with-malformed", text: "hello" }),
+      "{this is not valid json at all]",
+      JSON.stringify({ type: "assistant", cwd: "/Users/thief/nik/demo", sessionId: "session-with-malformed", token: "sk-abc" }),
+    ];
+    await writeFile(join(projectDir, "session-with-malformed.jsonl"), `${lines.join("\n")}\n`);
+
+    const page = await readClaudeSession(baseDir, "session-with-malformed", { cursor: 0, limit: 4 });
+    expect(page.events).toHaveLength(4);
+    expect(page.events[0]).toEqual({ type: "system", cwd: "/Users/thief/nik/demo", sessionId: "session-with-malformed", timestamp: "2026-09-01T00:00:00Z" });
+    expect(page.events[1]).toEqual({ type: "user", cwd: "/Users/thief/nik/demo", sessionId: "session-with-malformed", text: "hello" });
+    expect(page.events[2]).toEqual({ type: "unparsed", raw: "{this is not valid json at all]" });
+    expect(page.events[3]).toEqual({ type: "assistant", cwd: "/Users/thief/nik/demo", sessionId: "session-with-malformed", token: "[REDACTED]" });
+  });
+
+  it("rejects sessionId with path traversal characters", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "claude-projects-traversal-"));
+    const projectDir = join(baseDir, "-Users-thief-nik-demo");
+    const outsideDir = join(baseDir, "outside-project");
+    await mkdir(projectDir, { recursive: true });
+    await mkdir(outsideDir, { recursive: true });
+
+    // Create a real session inside the project directory
+    const safeLines = [JSON.stringify({ type: "system", cwd: "/Users/thief/nik/demo", sessionId: "safe-session", timestamp: "2026-09-01T00:00:00Z" })];
+    await writeFile(join(projectDir, "safe-session.jsonl"), `${safeLines.join("\n")}\n`);
+
+    // Create a decoy session file outside the intended project directory
+    const decoyLines = [JSON.stringify({ type: "system", cwd: "/Users/thief/nik/demo", sessionId: "decoy", timestamp: "2026-09-01T00:00:00Z" })];
+    await writeFile(join(outsideDir, "decoy.jsonl"), `${decoyLines.join("\n")}\n`);
+
+    // Attempt to access the outside file via path traversal
+    const page = await readClaudeSession(baseDir, "../outside-project/decoy", { cursor: 0, limit: 10 });
+    expect(page.events).toEqual([]);
+    expect(page.nextCursor).toBe(0);
+
+    // Verify the safe session is still accessible
+    const safePage = await readClaudeSession(baseDir, "safe-session", { cursor: 0, limit: 10 });
+    expect(safePage.events).toHaveLength(1);
+    expect(safePage.events[0]?.sessionId).toBe("safe-session");
+  });
 });

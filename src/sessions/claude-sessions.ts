@@ -36,12 +36,12 @@ async function findSessionFile(baseDir: string, sessionId: string): Promise<stri
   const projectDirs = await readdir(baseDir, { withFileTypes: true }).catch(() => []);
   for (const dirent of projectDirs) {
     if (!dirent.isDirectory()) continue;
-    const candidate = join(baseDir, dirent.name, `${sessionId}.jsonl`);
-    try {
-      await stat(candidate);
-      return candidate;
-    } catch {
-      continue;
+    const projectPath = join(baseDir, dirent.name);
+    const files = await readdir(projectPath, { withFileTypes: true }).catch(() => []);
+    for (const file of files) {
+      if (!file.isFile() || !file.name.endsWith(".jsonl")) continue;
+      const candidateId = file.name.slice(0, -".jsonl".length);
+      if (candidateId === sessionId) return join(projectPath, file.name);
     }
   }
   return null;
@@ -89,6 +89,12 @@ export async function readClaudeSession(
   const lines = content.split("\n").filter((line) => line.length > 0);
   const cursor = options.cursor ?? 0;
   const limit = options.limit ?? 100;
-  const page = lines.slice(cursor, cursor + limit).map((line) => redactJsonValue(JSON.parse(line)) as Record<string, unknown>);
+  const page = lines.slice(cursor, cursor + limit).map((line) => {
+    try {
+      return redactJsonValue(JSON.parse(line)) as Record<string, unknown>;
+    } catch {
+      return { type: "unparsed", raw: line.slice(0, 200) } as Record<string, unknown>;
+    }
+  });
   return { events: page, nextCursor: cursor + page.length };
 }
