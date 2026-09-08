@@ -127,4 +127,40 @@ describe("readClaudeSession", () => {
 
     expect(page.events[2]).toEqual({ type: "assistant", cwd: "/Users/thief/nik/demo", sessionId: "session-unparsed-redact", text: "done" });
   });
+
+  it("redacts secrets even when closing quote falls past truncation boundary", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "claude-projects-long-secret-"));
+    const projectDir = join(baseDir, "-Users-thief-nik-demo");
+    await mkdir(projectDir, { recursive: true });
+
+    // Create a malformed line longer than 200 chars where the secret assignment's
+    // closing quote falls past character 200. This tests that we redact the full
+    // line BEFORE truncating, not the other way around (which would miss the closing quote).
+    // After redaction, the [REDACTED] marker still fits within 200 chars, but if we truncated
+    // first (old code), the closing quote would be cut off and the regex wouldn't match.
+    const longLineWithSecret = `malformed line with padding: ${" ".repeat(140)}secret_token: "sk-prod-a1b2c3d4e5f6g7h8i9j0-very-long-unique-token";extra_stuff_here`;
+    const lines = [
+      JSON.stringify({ type: "system", cwd: "/Users/thief/nik/demo", sessionId: "session-long-secret", timestamp: "2026-09-01T00:00:00Z" }),
+      longLineWithSecret,
+      JSON.stringify({ type: "assistant", cwd: "/Users/thief/nik/demo", sessionId: "session-long-secret", text: "done" }),
+    ];
+    await writeFile(join(projectDir, "session-long-secret.jsonl"), `${lines.join("\n")}\n`);
+
+    const page = await readClaudeSession(baseDir, "session-long-secret", { cursor: 0, limit: 3 });
+
+    expect(page.events).toHaveLength(3);
+    expect(page.events[0]).toEqual({ type: "system", cwd: "/Users/thief/nik/demo", sessionId: "session-long-secret", timestamp: "2026-09-01T00:00:00Z" });
+
+    const unparseEvent = page.events[1] as Record<string, unknown>;
+    expect(unparseEvent.type).toBe("unparsed");
+    expect(typeof unparseEvent.raw).toBe("string");
+    const rawText = unparseEvent.raw as string;
+    // Verify redaction happened (should contain [REDACTED], not the raw secret)
+    expect(rawText).toContain("[REDACTED]");
+    expect(rawText).not.toContain("sk-prod-a1b2c3d4e5f6g7h8i9j0");
+    // Verify truncation happened (200 char limit)
+    expect(rawText.length).toBeLessThanOrEqual(200);
+
+    expect(page.events[2]).toEqual({ type: "assistant", cwd: "/Users/thief/nik/demo", sessionId: "session-long-secret", text: "done" });
+  });
 });

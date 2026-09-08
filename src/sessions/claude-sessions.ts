@@ -93,7 +93,7 @@ export async function readClaudeSession(
     try {
       return redactJsonValue(JSON.parse(line)) as Record<string, unknown>;
     } catch {
-      return { type: "unparsed", raw: redactTextLine(line.slice(0, 200)) } as Record<string, unknown>;
+      return { type: "unparsed", raw: redactTextLine(line).slice(0, 200) } as Record<string, unknown>;
     }
   });
   return { events: page, nextCursor: cursor + page.length };
