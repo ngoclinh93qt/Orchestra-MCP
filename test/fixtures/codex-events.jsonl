@@ -1,0 +1,6 @@
+{"type":"thread.started","thread_id":"01a07fd1-35c6-70a0-905b-b08b5625160c"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item-1","item_type":"agent_message","text":"OK"}}
+{"type":"turn.completed","usage":{"input_tokens":42,"output_tokens":3}}
+{"type":"turn.failed","error":{"message":"Example provider error."}}
+{"type":"some_future_event","payload":{"note":"forward compatibility check"}}

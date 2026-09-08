@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"session-abc-123","cwd":"/tmp/example-repo","tools":["Read","Edit"],"permissionMode":"acceptEdits"}
+{"type":"assistant","message":{"id":"msg-1","role":"assistant","type":"message","content":[{"type":"text","text":"Looking at the repository now."}]},"session_id":"session-abc-123"}
+{"type":"result","subtype":"success","session_id":"session-abc-123","is_error":false,"result":"Task complete.","num_turns":2}
+{"type":"result","subtype":"error_during_execution","session_id":"session-abc-123","is_error":true,"result":"Example provider error."}
+{"type":"some_future_event","payload":{"note":"forward compatibility check"}}

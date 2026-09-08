@@ -171,25 +171,25 @@ Commit: `feat: supervise bounded agent processes`
 **Interfaces:**
 - Produces: `CodexAdapter`, `ClaudeAdapter` implementing `ProviderAdapter`
 
-- [ ] **Step 1: Capture and sanitize one read-only JSON stream from each installed CLI**
+- [x] **Step 1: Capture and sanitize one read-only JSON stream from each installed CLI**
 
 Remove prompts, local paths, IDs, account data, and credentials; commit only representative event shapes.
 
-- [ ] **Step 2: Write failing Codex tests**
+- [x] **Step 2: Write failing Codex tests**
 
 Assert new args contain `exec --json --sandbox workspace-write -C <cwd> -`; resume uses the installed CLI's validated `exec resume <session-id>` ordering; prompt stays out of args; forbidden flags are absent. Test session, progress, final, error, and unknown events.
 
-- [ ] **Step 3: Write failing Claude tests**
+- [x] **Step 3: Write failing Claude tests**
 
 Assert direct args include `-p --output-format stream-json --permission-mode acceptEdits --permission-prompts none`; resume uses `--resume <session-id>`; forbidden flags are absent. Test the same normalized event classes.
 
-- [ ] **Step 4: Confirm red, implement pure parsers and probes**
+- [x] **Step 4: Confirm red, implement pure parsers and probes**
 
 Run: `npm test -- test/codex-adapter.test.ts test/claude-adapter.test.ts`
 
 Probe only `codex --version` and `claude --version`, each with a short timeout.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `npm test -- test/codex-adapter.test.ts test/claude-adapter.test.ts test/job-supervisor.test.ts`
 
