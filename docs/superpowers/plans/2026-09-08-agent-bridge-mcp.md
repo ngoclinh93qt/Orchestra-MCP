@@ -271,31 +271,43 @@ Commit: `feat: protect MCP with single-user OAuth`
 
 ### Task 7: Private Plugin and Local Configuration
 
-**Files:**
-- Create: `.codex-plugin/plugin.json`, `.mcp.json`, `skills/agent-bridge/SKILL.md`, `agents/openai.yaml`
-- Create: `config/codex.local.example.toml`, `docs/CONNECT_CHATGPT.md`
+**Deviation from the original file list (discovered during Step 1):** this
+plan was written before verifying the real Codex CLI plugin format in this
+session. `codex plugin marketplace add` requires a marketplace manifest at
+`<root>/.agents/plugins/marketplace.json` whose `plugins[].source.path`
+resolves relative to `<root>` itself (verified by actually running
+`codex plugin marketplace add` / `codex plugin add` against this repo in an
+isolated `CODEX_HOME`) — a bare `.codex-plugin/plugin.json` at the repo root
+is not installable as-is. There is also no evidence `agents/openai.yaml`
+corresponds to any real Codex/ChatGPT manifest; it was not created rather
+than fabricating an unverifiable format.
+
+**Files actually created:**
+- `.agents/plugins/marketplace.json` (marketplace manifest)
+- `plugins/agent-bridge/.codex-plugin/plugin.json`, `plugins/agent-bridge/.mcp.json`, `plugins/agent-bridge/skills/agent-bridge/SKILL.md` (the plugin itself)
+- `config/codex.local.example.toml`, `docs/CONNECT_CHATGPT.md`
 - Test: `test/plugin-package.test.ts`
 
 **Interfaces:**
 - Produces: private remote plugin plus optional localhost configuration
 
-- [ ] **Step 1: Invoke the current `plugin-creator` skill**
+- [x] **Step 1: Derive and validate the real plugin format**
 
-Use its manifest and personal-marketplace conventions; validate with installed Codex tooling.
+No `plugin-creator` skill was available in this session. Derived the marketplace/plugin manifest schema from the actually-installed Codex CLI's own cached plugins (github, notion, superpowers) and validated the result end-to-end — `codex plugin marketplace add .` then `codex plugin add agent-bridge@agent-bridge-marketplace` — in an isolated `CODEX_HOME`, confirming `installed, enabled` and correct materialized `.mcp.json`/`plugin.json`/`SKILL.md` content.
 
-- [ ] **Step 2: Write failing package tests**
+- [x] **Step 2: Write failing package tests**
 
 Assert manifests parse, remote URL is exact, write tools default to approval, all referenced files exist, and tracked files contain no credentials.
 
-- [ ] **Step 3: Create plugin and workflow skill**
+- [x] **Step 3: Create plugin and workflow skill**
 
-Instruct ChatGPT to start with list/status, request approval before start/continue/cancel, poll actual state, and preserve returned task IDs. Declare the OAuth-enabled remote HTTP MCP.
+Instruct ChatGPT/Codex to start with list/status, request approval before start/continue/cancel, poll actual state, and preserve returned task IDs. Declare the OAuth-enabled remote HTTP MCP via `.mcp.json`.
 
-- [ ] **Step 4: Add an opt-in localhost example**
+- [x] **Step 4: Add an opt-in localhost example**
 
-Point it to `http://127.0.0.1:8787/mcp` using a keychain-backed bearer environment variable; do not edit global Codex config.
+Point it to `http://127.0.0.1:8787/mcp` using a keychain-backed bearer environment variable; do not edit global Codex config. Verified the exact `codex mcp add` TOML output in an isolated `CODEX_HOME` before writing the example.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `npm test -- test/plugin-package.test.ts && npm run verify`
 

@@ -1,0 +1,21 @@
+# Example local Codex CLI configuration for the loopback Agent Bridge endpoint.
+#
+# This file is not loaded automatically and is never merged into your global
+# ~/.codex/config.toml by anything in this repository. Either:
+#
+#   1. Run the equivalent command (recommended — it validates the URL for you):
+#
+#        codex mcp add agent-bridge-local \
+#          --url http://127.0.0.1:8787/mcp \
+#          --bearer-token-env-var AGENT_BRIDGE_LOCAL_TOKEN
+#
+#   2. Or copy the block below into ~/.codex/config.toml yourself.
+#
+# Either way, set AGENT_BRIDGE_LOCAL_TOKEN in your shell environment to the
+# local bearer token `npm run enroll-owner` printed — ideally sourced from
+# your keychain or password manager (e.g. `export AGENT_BRIDGE_LOCAL_TOKEN="$(security find-generic-password -w -s agent-bridge-local -a "$USER")"`)
+# rather than hardcoded in a shell profile.
+
+[mcp_servers.agent-bridge-local]
+url = "http://127.0.0.1:8787/mcp"
+bearer_token_env_var = "AGENT_BRIDGE_LOCAL_TOKEN"

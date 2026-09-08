@@ -1,0 +1,27 @@
+{
+  "name": "agent-bridge",
+  "version": "0.1.0",
+  "description": "Start, watch, continue, and cancel local Codex CLI and Claude Code tasks through a private, self-hosted MCP bridge. Not for redistribution.",
+  "author": {
+    "name": "Private owner",
+    "url": "https://mcp.markapidown.net/"
+  },
+  "license": "UNLICENSED",
+  "keywords": ["codex", "claude", "agents", "mcp", "automation", "private"],
+  "mcpServers": "./.mcp.json",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Agent Bridge (private)",
+    "shortDescription": "Start, watch, continue, and cancel local coding-agent tasks",
+    "longDescription": "A private connector to a single self-hosted Agent Bridge MCP service. It starts new Codex CLI or Claude Code tasks in allowlisted local repositories, reports status and output, continues a finished or waiting task's provider session, and cancels a running task. It never runs an arbitrary shell command and never bypasses Codex sandboxing or Claude Code permission controls.",
+    "developerName": "Private owner",
+    "category": "Developer Tools",
+    "capabilities": ["Interactive", "Read", "Write"],
+    "websiteURL": "https://mcp.markapidown.net/",
+    "defaultPrompt": [
+      "List my agent bridge tasks.",
+      "Start a Codex task in <allowlisted repo path> to <task>.",
+      "Show the latest output for task <task id>."
+    ]
+  }
+}
