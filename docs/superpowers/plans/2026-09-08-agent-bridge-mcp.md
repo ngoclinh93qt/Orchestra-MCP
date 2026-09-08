@@ -6,7 +6,7 @@
 
 **Architecture:** A TypeScript/Node.js service binds only to `127.0.0.1:8787`, persists task metadata in SQLite and provider events in JSONL, and exposes six MCP tools over Streamable HTTP. A named Cloudflare Tunnel publishes the loopback service; MCP-compatible OAuth protects remote access, while provider adapters invoke installed CLIs without a shell or permission-bypass flags.
 
-**Tech Stack:** Node.js 20, TypeScript 7, MCP TypeScript SDK 1.30, Express 5, Zod 4, better-sqlite3 13, Vitest 5, Cloudflare Tunnel, macOS LaunchAgents
+**Tech Stack:** Node.js 20, TypeScript 7, MCP TypeScript SDK 1.30, Express 5, Zod 4, better-sqlite3 12, Vitest 4, Cloudflare Tunnel, macOS LaunchAgents
 
 **Spec:** `docs/superpowers/specs/2026-09-08-agent-bridge-mcp-design.md`
 
@@ -32,11 +32,11 @@
 **Interfaces:**
 - Produces: `BridgeConfig`, `loadConfig(env)`, `resolveAllowedDirectory(path, roots)`
 
-- [ ] **Step 1: Add pinned dependencies and scripts**
+- [x] **Step 1: Add pinned dependencies and scripts**
 
-Pin MCP SDK `1.30.0`, Express `5.2.1`, Zod `4.5.4`, better-sqlite3 `13.0.3`, TypeScript `7.0.2`, Vitest `5.0.0`, and tsx `4.23.13`. Add `build`, `typecheck`, `test`, `start`, and `verify` scripts.
+Pin MCP SDK `1.30.0`, Express `5.2.1`, Zod `4.5.4`, better-sqlite3 `12.11.1`, TypeScript `7.0.2`, Vitest `4.1.11`, and tsx `4.23.13`. Add `build`, `typecheck`, `test`, `start`, and `verify` scripts.
 
-- [ ] **Step 2: Write failing configuration tests**
+- [x] **Step 2: Write failing configuration tests**
 
 ```ts
 expect(loadConfig({AGENT_BRIDGE_ALLOWED_ROOTS: "/Users/thief/nik"})).toMatchObject({
@@ -46,11 +46,11 @@ await expect(resolveAllowedDirectory(linkOutsideRoot, [allowedRoot]))
   .rejects.toThrow(PathNotAllowedError);
 ```
 
-- [ ] **Step 3: Confirm red**
+- [x] **Step 3: Confirm red**
 
 Run: `npm install && npm test -- test/config.test.ts`
 
-- [ ] **Step 4: Implement immutable config and realpath containment**
+- [x] **Step 4: Implement immutable config and realpath containment**
 
 ```ts
 export type BridgeConfig = Readonly<{
@@ -63,7 +63,7 @@ export type BridgeConfig = Readonly<{
 
 Reject relative/missing paths, non-HTTPS public URLs, non-loopback hosts, empty roots, and symlink escapes.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `npm test -- test/config.test.ts && npm run typecheck`
 
@@ -384,4 +384,3 @@ Commit: `docs: finish agent bridge operations guide`
 ## Completion Evidence
 
 Report focused tests, final `npm run verify`, loopback/public MCP checks, OAuth rejection and success, redacted provider smoke states, loopback-only `lsof`, LaunchAgent state, Cloudflare hostname health, commits, clean Git status, and exact rollback commands.
-
