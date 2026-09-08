@@ -60,6 +60,11 @@ describe("readFileLines", () => {
     await writeFile(binaryPath, Buffer.from([0x00, 0x01, 0x02, 0xff]));
     await expect(readFileLines(binaryPath, [root], {})).rejects.toBeInstanceOf(BinaryFileError);
   });
+
+  it("wraps a nonexistent file's raw ENOENT into a typed error", async () => {
+    const { root } = await buildFixtureRepo();
+    await expect(readFileLines(join(root, "does-not-exist.ts"), [root], {})).rejects.toBeInstanceOf(PathNotAllowedError);
+  });
 });
 
 describe("searchRepo", () => {
@@ -97,5 +102,22 @@ describe("searchRepo", () => {
   it("rejects an invalid regex", async () => {
     const { root } = await buildFixtureRepo();
     await expect(searchRepo(root, [root], "(", { regex: true })).rejects.toThrow();
+  });
+
+  it("redacts secrets even when line is longer than MAX_MATCH_TEXT_LENGTH", async () => {
+    const { root } = await buildFixtureRepo();
+    // Create a line longer than 300 characters where the secret assignment's
+    // closing quote falls past character 300. This tests that we redact the full
+    // line BEFORE truncating, not the other way around (which would miss the closing quote).
+    const longLineWithSecret = `const x = 1; ${" ".repeat(250)}const longSecret = "sk-very-long-unique-secret-value-that-starts-before-300-but-closes-after-300-chars";`;
+    await writeFile(join(root, "long-secret.ts"), longLineWithSecret);
+    const result = await searchRepo(root, [root], "sk-very-long-unique", {});
+    expect(result.matches).toHaveLength(1);
+    const matchText = result.matches[0]!.text;
+    // Verify redaction happened (should contain [REDACTED], not the partial secret)
+    expect(matchText).toContain("[REDACTED]");
+    expect(matchText).not.toContain("sk-very-long-unique");
+    // Verify truncation happened (300 char limit)
+    expect(matchText.length).toBeLessThanOrEqual(300);
   });
 });

@@ -157,7 +157,7 @@ export async function searchRepo(
       matches.push({
         file: entry.path,
         line: i + 1,
-        text: redactTextLine(line.slice(0, MAX_MATCH_TEXT_LENGTH)),
+        text: redactTextLine(line).slice(0, MAX_MATCH_TEXT_LENGTH),
       });
       if (matches.length >= limit) {
         truncated = true;
