@@ -46,3 +46,10 @@ export class TaskNotResumableError extends Error {
     this.name = "TaskNotResumableError";
   }
 }
+
+export class BinaryFileError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BinaryFileError";
+  }
+}
