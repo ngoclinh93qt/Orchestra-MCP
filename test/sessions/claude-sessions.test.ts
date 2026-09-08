@@ -93,4 +93,38 @@ describe("readClaudeSession", () => {
     expect(safePage.events).toHaveLength(1);
     expect(safePage.events[0]?.sessionId).toBe("safe-session");
   });
+
+  it("redacts unparsed-line fallback to prevent secret leakage", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "claude-projects-unparsed-redaction-"));
+    const projectDir = join(baseDir, "-Users-thief-nik-demo");
+    await mkdir(projectDir, { recursive: true });
+
+    // Create a session file with a malformed line containing a secret-shaped fragment
+    const lines = [
+      JSON.stringify({ type: "system", cwd: "/Users/thief/nik/demo", sessionId: "session-unparsed-redact", timestamp: "2026-09-01T00:00:00Z" }),
+      "not valid json but has token: \"sk-live-abc123def456\" in it and should be redacted",
+      JSON.stringify({ type: "assistant", cwd: "/Users/thief/nik/demo", sessionId: "session-unparsed-redact", text: "done" }),
+    ];
+    await writeFile(join(projectDir, "session-unparsed-redact.jsonl"), `${lines.join("\n")}\n`);
+
+    // Read the session including the malformed line
+    const page = await readClaudeSession(baseDir, "session-unparsed-redact", { cursor: 0, limit: 3 });
+
+    expect(page.events).toHaveLength(3);
+    expect(page.events[0]).toEqual({ type: "system", cwd: "/Users/thief/nik/demo", sessionId: "session-unparsed-redact", timestamp: "2026-09-01T00:00:00Z" });
+
+    // Verify the malformed line's raw field is redacted (not containing the raw secret)
+    const unparseEvent = page.events[1] as Record<string, unknown>;
+    expect(unparseEvent.type).toBe("unparsed");
+    expect(typeof unparseEvent.raw).toBe("string");
+    const rawText = unparseEvent.raw as string;
+    // Check that the raw text does NOT contain the unredacted secret
+    expect(rawText).not.toContain("sk-live-abc123def456");
+    // Check that it contains the redaction marker
+    expect(rawText).toContain("[REDACTED]");
+    // Verify the structure is preserved (the line is truncated to 200 chars)
+    expect(rawText).toContain("not valid json but has token:");
+
+    expect(page.events[2]).toEqual({ type: "assistant", cwd: "/Users/thief/nik/demo", sessionId: "session-unparsed-redact", text: "done" });
+  });
 });

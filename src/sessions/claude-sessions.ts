@@ -1,6 +1,6 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { redactJsonValue } from "../security/redact.js";
+import { redactJsonValue, redactTextLine } from "../security/redact.js";
 import type { SessionPage, SessionSummary } from "./types.js";
 
 const CWD_SCAN_LIMIT = 20;
@@ -93,7 +93,7 @@ export async function readClaudeSession(
     try {
       return redactJsonValue(JSON.parse(line)) as Record<string, unknown>;
     } catch {
-      return { type: "unparsed", raw: line.slice(0, 200) } as Record<string, unknown>;
+      return { type: "unparsed", raw: redactTextLine(line.slice(0, 200)) } as Record<string, unknown>;
     }
   });
   return { events: page, nextCursor: cursor + page.length };
