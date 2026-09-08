@@ -118,6 +118,34 @@ describe("install/uninstall scripts", () => {
     await chmod(path, 0o755);
   }
 
+  /**
+   * A launchctl stand-in whose `bootstrap` fails with the real, observed transient error
+   * (bootout hasn't finished releasing the label yet) for the first `failCount` calls per
+   * label, then succeeds — reproducing the exact race that install-services.sh must retry
+   * through rather than leave a service down.
+   */
+  async function makeFlakyFakeLaunchctl(binDir: string, logPath: string, countersDir: string, failCount: number): Promise<void> {
+    const script = `#!/usr/bin/env bash
+echo "launchctl $*" >> "${logPath}"
+if [ "$1" = "bootstrap" ]; then
+  LABEL="$(basename "$3" .plist)"
+  COUNTER_FILE="${countersDir}/$LABEL.count"
+  COUNT=0
+  [ -f "$COUNTER_FILE" ] && COUNT="$(cat "$COUNTER_FILE")"
+  COUNT=$((COUNT + 1))
+  echo "$COUNT" > "$COUNTER_FILE"
+  if [ "$COUNT" -le ${failCount} ]; then
+    echo "launchctl: Input/output error" >&2
+    exit 5
+  fi
+fi
+exit 0
+`;
+    const path = join(binDir, "launchctl");
+    await writeFile(path, script);
+    await chmod(path, 0o755);
+  }
+
   it("is idempotent: installing twice ends with both labels bootstrapped and no error", async () => {
     const base = await mkdtemp(join(tmpdir(), "bridge-install-"));
     const launchAgentsDir = join(base, "LaunchAgents");
@@ -147,6 +175,34 @@ describe("install/uninstall scripts", () => {
     expect(bootstrapCalls.length).toBe(4); // 2 labels x 2 install runs
     expect(log).toContain("net.markapidown.agent-bridge");
     expect(log).toContain("net.markapidown.agent-tunnel");
+  }, 30000);
+
+  it("retries through a transient bootstrap EIO instead of leaving a service down", async () => {
+    const base = await mkdtemp(join(tmpdir(), "bridge-install-flaky-"));
+    const launchAgentsDir = join(base, "LaunchAgents");
+    const stateDir = join(base, "state");
+    const fakeBinDir = join(base, "fakebin");
+    const countersDir = join(base, "counters");
+    const logPath = join(base, "launchctl.log");
+    await mkdir(fakeBinDir, { recursive: true });
+    await mkdir(stateDir, { recursive: true });
+    await mkdir(countersDir, { recursive: true });
+    await makeFlakyFakeLaunchctl(fakeBinDir, logPath, countersDir, 2);
+
+    const env = {
+      ...process.env,
+      PATH: `${fakeBinDir}:${process.env.PATH}`,
+      LAUNCH_AGENTS_DIR: launchAgentsDir,
+      AGENT_BRIDGE_ALLOWED_ROOTS: base,
+      AGENT_BRIDGE_STATE_DIR: stateDir,
+    };
+
+    await execFileAsync("bash", [join(repoRoot, "scripts", "install-services.sh")], { env });
+
+    const log = await readFile(logPath, "utf8");
+    const bootstrapAttempts = log.split("\n").filter((line) => line.includes("bootstrap"));
+    // 2 labels, each failing twice before succeeding on the 3rd attempt.
+    expect(bootstrapAttempts.length).toBe(6);
   }, 30000);
 
   it("uninstall removes the plists and unloads both labels but never touches bridge state", async () => {
