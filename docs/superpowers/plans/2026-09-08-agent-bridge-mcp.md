@@ -206,23 +206,23 @@ Commit: `feat: add coding agent adapters`
 **Interfaces:**
 - Produces: `agent_start`, `agent_list`, `agent_status`, `agent_output`, `agent_continue`, `agent_cancel`; `createApp(deps)`
 
-- [ ] **Step 1: Write failing schema/behavior tests**
+- [x] **Step 1: Write failing schema/behavior tests**
 
 Assert only six tools exist; list/status/output are read-only; start/continue/cancel are writes; cancellation is idempotent. Test async start, pagination, continuation requiring session ID, missing-task errors, and cancel.
 
-- [ ] **Step 2: Confirm red**
+- [x] **Step 2: Confirm red**
 
 Run: `npm test -- test/mcp-tools.test.ts`
 
-- [ ] **Step 3: Implement compact structured handlers**
+- [x] **Step 3: Implement compact structured handlers**
 
 Never return prompts, environments, raw database rows, or provider objects.
 
-- [ ] **Step 4: Write failing transport tests and implement**
+- [x] **Step 4: Write failing transport tests and implement**
 
 Test `/healthz`, MCP initialize/list-tools over Streamable HTTP, request size cap, 404 fallback, loopback binding, per-session transport, and graceful SIGTERM shutdown.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `npm test -- test/mcp-tools.test.ts test/http-transport.test.ts`
 

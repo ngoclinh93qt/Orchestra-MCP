@@ -1,0 +1,182 @@
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { BridgeTask, Provider, TaskState } from "../domain/task.js";
+import {
+  ConcurrencyLimitError,
+  PathNotAllowedError,
+  PromptTooLargeError,
+  ProviderUnavailableError,
+  TaskNotFoundError,
+  TaskNotResumableError,
+} from "../errors.js";
+import type { EventLog } from "../store/event-log.js";
+import type { TaskStore } from "../store/task-store.js";
+import type { JobSupervisor } from "../supervisor/job-supervisor.js";
+import { TOOL_DEFINITIONS, type ToolName } from "./tool-schemas.js";
+
+export interface RegisterToolsDeps {
+  readonly supervisor: JobSupervisor;
+  readonly taskStore: TaskStore;
+  readonly eventLog: EventLog;
+}
+
+/** Errors expected in normal operation: reported as a tool-level error, never an internal 500. */
+const EXPECTED_ERROR_TYPES = [
+  ConcurrencyLimitError,
+  PathNotAllowedError,
+  PromptTooLargeError,
+  ProviderUnavailableError,
+  TaskNotFoundError,
+  TaskNotResumableError,
+];
+
+function isExpectedError(error: unknown): error is Error {
+  return EXPECTED_ERROR_TYPES.some((ctor) => error instanceof ctor);
+}
+
+function jsonResult(value: unknown): CallToolResult {
+  return { content: [{ type: "text", text: JSON.stringify(value) }] };
+}
+
+function errorResult(error: Error): CallToolResult {
+  return { isError: true, content: [{ type: "text", text: error.message }] };
+}
+
+/**
+ * The only fields ever returned to a caller. Deliberately excludes prompt text (never stored
+ * anyway), environment variables, and raw database rows — only a compact status summary.
+ */
+export interface TaskSummary {
+  readonly taskId: string;
+  readonly provider: Provider;
+  readonly cwd: string;
+  readonly state: TaskState;
+  readonly parentId: string | null;
+  readonly hasProviderSession: boolean;
+  readonly exitCode: number | null;
+  readonly errorSummary: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export function toSummary(task: BridgeTask): TaskSummary {
+  return {
+    taskId: task.id,
+    provider: task.provider,
+    cwd: task.cwd,
+    state: task.state,
+    parentId: task.parentId,
+    hasProviderSession: task.providerSessionId !== null,
+    exitCode: task.exitCode,
+    errorSummary: task.errorSummary,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+  };
+}
+
+export interface AgentStartArgs {
+  readonly provider: Provider;
+  readonly cwd: string;
+  readonly prompt: string;
+}
+
+export interface AgentListArgs {
+  readonly provider?: Provider;
+  readonly state?: TaskState;
+  readonly limit?: number;
+}
+
+export interface AgentStatusArgs {
+  readonly taskId: string;
+}
+
+export interface AgentOutputArgs {
+  readonly taskId: string;
+  readonly cursor?: number;
+  readonly limit?: number;
+}
+
+export interface AgentContinueArgs {
+  readonly taskId: string;
+  readonly message: string;
+}
+
+export interface AgentCancelArgs {
+  readonly taskId: string;
+}
+
+/**
+ * Pure handler implementations, independent of any MCP transport. Kept separate from
+ * `registerTools` so behavior can be tested directly without spinning up a server or transport.
+ */
+export function createToolHandlers(deps: RegisterToolsDeps) {
+  return {
+    async agent_start(args: AgentStartArgs): Promise<CallToolResult> {
+      try {
+        const task = await deps.supervisor.start(args);
+        return jsonResult(toSummary(task));
+      } catch (error) {
+        if (isExpectedError(error)) return errorResult(error);
+        throw error;
+      }
+    },
+
+    async agent_list(args: AgentListArgs): Promise<CallToolResult> {
+      const tasks = deps.taskStore.list(args);
+      return jsonResult({ tasks: tasks.map(toSummary) });
+    },
+
+    async agent_status(args: AgentStatusArgs): Promise<CallToolResult> {
+      const task = deps.taskStore.get(args.taskId);
+      if (!task) return errorResult(new TaskNotFoundError(args.taskId));
+      return jsonResult(toSummary(task));
+    },
+
+    async agent_output(args: AgentOutputArgs): Promise<CallToolResult> {
+      const task = deps.taskStore.get(args.taskId);
+      if (!task) return errorResult(new TaskNotFoundError(args.taskId));
+      const page = deps.eventLog.read(args.taskId, { cursor: args.cursor ?? 0, limit: args.limit ?? 50 });
+      return jsonResult(page);
+    },
+
+    async agent_continue(args: AgentContinueArgs): Promise<CallToolResult> {
+      try {
+        const child = await deps.supervisor.continue(args);
+        return jsonResult(toSummary(child));
+      } catch (error) {
+        if (isExpectedError(error)) return errorResult(error);
+        throw error;
+      }
+    },
+
+    async agent_cancel(args: AgentCancelArgs): Promise<CallToolResult> {
+      try {
+        const task = deps.supervisor.cancel(args.taskId);
+        return jsonResult(toSummary(task));
+      } catch (error) {
+        if (isExpectedError(error)) return errorResult(error);
+        throw error;
+      }
+    },
+  } as const;
+}
+
+export type ToolHandlers = ReturnType<typeof createToolHandlers>;
+
+/** Registers all six tools, and no others, on the given MCP server. */
+export function registerTools(server: McpServer, deps: RegisterToolsDeps): void {
+  const handlers = createToolHandlers(deps);
+  for (const definition of TOOL_DEFINITIONS) {
+    server.registerTool(
+      definition.name,
+      {
+        description: definition.description,
+        inputSchema: definition.inputSchema,
+        annotations: definition.annotations,
+      },
+      // Each handler's args type matches its own schema; the registry only needs a uniform
+      // callable, and every branch above is exercised directly by tool-handler unit tests.
+      handlers[definition.name as ToolName] as (args: Record<string, unknown>) => Promise<CallToolResult>,
+    );
+  }
+}
