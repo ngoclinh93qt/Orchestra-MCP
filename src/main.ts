@@ -7,6 +7,7 @@ import { loadConfig } from "./config.js";
 import { createApp, type CreateAppAuthOptions } from "./http/app.js";
 import { ClaudeAdapter } from "./providers/claude.js";
 import { CodexAdapter } from "./providers/codex.js";
+import { SessionStore } from "./sessions/session-store.js";
 import { EventLog } from "./store/event-log.js";
 import { TaskStore } from "./store/task-store.js";
 import { JobSupervisor } from "./supervisor/job-supervisor.js";
@@ -17,6 +18,7 @@ function main(): void {
   const taskStore = new TaskStore(join(config.stateDir, "bridge.sqlite3"));
   const eventLog = new EventLog(join(config.stateDir, "logs"));
   const oauthStore = new OAuthStore(join(config.stateDir, "bridge.sqlite3"));
+  const sessionStore = new SessionStore({ allowedRoots: config.allowedRoots });
 
   const supervisor = new JobSupervisor({
     taskStore,
@@ -47,7 +49,7 @@ function main(): void {
   }
 
   const { app, shutdown: shutdownTransports } = createApp(
-    { supervisor, taskStore, eventLog },
+    { supervisor, taskStore, eventLog, allowedRoots: config.allowedRoots, sessionStore },
     {
       maxRequestBytes: config.maxPromptBytes,
       ...(auth ? { auth } : {}),

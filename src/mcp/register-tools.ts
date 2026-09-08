@@ -3,6 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { BridgeTask, Provider, TaskState } from "../domain/task.js";
 import {
+  BinaryFileError,
   ConcurrencyLimitError,
   PathNotAllowedError,
   PromptTooLargeError,
@@ -10,6 +11,8 @@ import {
   TaskNotFoundError,
   TaskNotResumableError,
 } from "../errors.js";
+import { listDirectory, readFileLines, searchRepo } from "../repo/repo-reader.js";
+import type { SessionStore } from "../sessions/session-store.js";
 import type { EventLog } from "../store/event-log.js";
 import type { TaskStore } from "../store/task-store.js";
 import type { JobSupervisor } from "../supervisor/job-supervisor.js";
@@ -19,10 +22,13 @@ export interface RegisterToolsDeps {
   readonly supervisor: JobSupervisor;
   readonly taskStore: TaskStore;
   readonly eventLog: EventLog;
+  readonly allowedRoots: readonly string[];
+  readonly sessionStore: SessionStore;
 }
 
 /** Errors expected in normal operation: reported as a tool-level error, never an internal 500. */
 const EXPECTED_ERROR_TYPES = [
+  BinaryFileError,
   ConcurrencyLimitError,
   PathNotAllowedError,
   PromptTooLargeError,
@@ -125,6 +131,38 @@ export interface AgentCancelArgs {
   readonly taskId: string;
 }
 
+export interface RepoListArgs {
+  readonly path: string;
+  readonly depth?: number;
+  readonly cursor?: number;
+  readonly limit?: number;
+}
+
+export interface RepoReadArgs {
+  readonly path: string;
+  readonly cursor?: number;
+  readonly limit?: number;
+}
+
+export interface RepoSearchArgs {
+  readonly path: string;
+  readonly query: string;
+  readonly regex?: boolean;
+  readonly limit?: number;
+}
+
+export interface SessionListArgs {
+  readonly provider?: "codex" | "claude";
+  readonly limit?: number;
+}
+
+export interface SessionReadArgs {
+  readonly provider: "codex" | "claude";
+  readonly sessionId: string;
+  readonly cursor?: number;
+  readonly limit?: number;
+}
+
 /**
  * Pure handler implementations, independent of any MCP transport. Kept separate from
  * `registerTools` so behavior can be tested directly without spinning up a server or transport.
@@ -184,12 +222,73 @@ export function createToolHandlers(deps: RegisterToolsDeps) {
         throw error;
       }
     },
+
+    async repo_list(args: RepoListArgs, extra?: ToolExtra): Promise<CallToolResult> {
+      if (!hasScope(extra, "agent:read")) return insufficientScope("agent:read");
+      try {
+        const result = await listDirectory(args.path, deps.allowedRoots, {
+          ...(args.depth !== undefined ? { depth: args.depth } : {}),
+          ...(args.cursor !== undefined ? { cursor: args.cursor } : {}),
+          ...(args.limit !== undefined ? { limit: args.limit } : {}),
+        });
+        return jsonResult(result);
+      } catch (error) {
+        if (isExpectedError(error)) return errorResult(error);
+        throw error;
+      }
+    },
+
+    async repo_read(args: RepoReadArgs, extra?: ToolExtra): Promise<CallToolResult> {
+      if (!hasScope(extra, "agent:read")) return insufficientScope("agent:read");
+      try {
+        const result = await readFileLines(args.path, deps.allowedRoots, {
+          ...(args.cursor !== undefined ? { cursor: args.cursor } : {}),
+          ...(args.limit !== undefined ? { limit: args.limit } : {}),
+        });
+        return jsonResult(result);
+      } catch (error) {
+        if (isExpectedError(error)) return errorResult(error);
+        throw error;
+      }
+    },
+
+    async repo_search(args: RepoSearchArgs, extra?: ToolExtra): Promise<CallToolResult> {
+      if (!hasScope(extra, "agent:read")) return insufficientScope("agent:read");
+      try {
+        const result = await searchRepo(args.path, deps.allowedRoots, args.query, {
+          ...(args.regex !== undefined ? { regex: args.regex } : {}),
+          ...(args.limit !== undefined ? { limit: args.limit } : {}),
+        });
+        return jsonResult(result);
+      } catch (error) {
+        if (isExpectedError(error)) return errorResult(error);
+        throw error;
+      }
+    },
+
+    async session_list(args: SessionListArgs, extra?: ToolExtra): Promise<CallToolResult> {
+      if (!hasScope(extra, "agent:read")) return insufficientScope("agent:read");
+      const sessions = await deps.sessionStore.list({
+        ...(args.provider !== undefined ? { provider: args.provider } : {}),
+        ...(args.limit !== undefined ? { limit: args.limit } : {}),
+      });
+      return jsonResult({ sessions });
+    },
+
+    async session_read(args: SessionReadArgs, extra?: ToolExtra): Promise<CallToolResult> {
+      if (!hasScope(extra, "agent:read")) return insufficientScope("agent:read");
+      const page = await deps.sessionStore.read(args.provider, args.sessionId, {
+        ...(args.cursor !== undefined ? { cursor: args.cursor } : {}),
+        ...(args.limit !== undefined ? { limit: args.limit } : {}),
+      });
+      return jsonResult(page);
+    },
   } as const;
 }
 
 export type ToolHandlers = ReturnType<typeof createToolHandlers>;
 
-/** Registers all six tools, and no others, on the given MCP server. */
+/** Registers all eleven tools, and no others, on the given MCP server. */
 export function registerTools(server: McpServer, deps: RegisterToolsDeps): void {
   const handlers = createToolHandlers(deps);
   for (const definition of TOOL_DEFINITIONS) {

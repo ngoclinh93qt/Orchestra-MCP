@@ -7,6 +7,11 @@ export const TOOL_NAMES = [
   "agent_output",
   "agent_continue",
   "agent_cancel",
+  "repo_list",
+  "repo_read",
+  "repo_search",
+  "session_list",
+  "session_read",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];
@@ -37,7 +42,7 @@ export interface ToolDefinition {
 
 /**
  * The complete, deliberately small MCP tool surface. There is no run_shell, arbitrary
- * executable, environment, model, sandbox-bypass, download, or delete-log tool: only these six.
+ * executable, environment, model, sandbox-bypass, download, or delete-log tool: only these eleven.
  */
 export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
@@ -94,5 +99,59 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       taskId: z.string().min(1),
     },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "repo_list",
+    description:
+      "List files and directories under an allowlisted path. Hides .git, node_modules, .env*, and build/cache directories.",
+    inputSchema: {
+      path: z.string().min(1).describe("Absolute path inside an allowlisted root"),
+      depth: z.number().int().positive().max(5).optional(),
+      cursor: z.number().int().min(0).optional(),
+      limit: z.number().int().positive().max(500).optional(),
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "repo_read",
+    description: "Read a file's content by line range. Refuses .env files and binary files.",
+    inputSchema: {
+      path: z.string().min(1),
+      cursor: z.number().int().min(0).optional(),
+      limit: z.number().int().positive().max(2000).optional(),
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "repo_search",
+    description: "Search for a literal string or regular expression across an allowlisted path, bounded to a result limit.",
+    inputSchema: {
+      path: z.string().min(1).describe("Absolute path inside an allowlisted root to search under"),
+      query: z.string().min(1),
+      regex: z.boolean().optional(),
+      limit: z.number().int().positive().max(200).optional(),
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "session_list",
+    description:
+      "List Claude Code and Codex terminal sessions whose working directory is inside an allowlisted root. lastEventHint is a best-effort heuristic, not authoritative status.",
+    inputSchema: {
+      provider: z.enum(["codex", "claude"]).optional(),
+      limit: z.number().int().positive().max(200).optional(),
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "session_read",
+    description: "Read the content of one Claude Code or Codex session, paginated.",
+    inputSchema: {
+      provider: z.enum(["codex", "claude"]),
+      sessionId: z.string().min(1),
+      cursor: z.number().int().min(0).optional(),
+      limit: z.number().int().positive().max(1000).optional(),
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
 ];

@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createApp, type BridgeApp } from "../src/http/app.js";
+import { SessionStore } from "../src/sessions/session-store.js";
 import { EventLog } from "../src/store/event-log.js";
 import { TaskStore } from "../src/store/task-store.js";
 import { JobSupervisor } from "../src/supervisor/job-supervisor.js";
@@ -33,7 +34,20 @@ async function buildHarness(maxRequestBytes?: number): Promise<Harness> {
     maxConcurrentPerProvider: 1,
     maxPromptBytes: 1_000_000,
   });
-  const bridgeApp = createApp({ supervisor, taskStore, eventLog }, maxRequestBytes ? { maxRequestBytes } : {});
+  const bridgeApp = createApp(
+    {
+      supervisor,
+      taskStore,
+      eventLog,
+      allowedRoots: [base],
+      sessionStore: new SessionStore({
+        allowedRoots: [base],
+        claudeProjectsDir: join(base, "claude-projects"),
+        codexSessionsDir: join(base, "codex-sessions"),
+      }),
+    },
+    maxRequestBytes ? { maxRequestBytes } : {},
+  );
 
   const server = await new Promise<Server>((resolve) => {
     const s = bridgeApp.app.listen(0, "127.0.0.1", () => resolve(s));
@@ -84,7 +98,7 @@ describe("loopback HTTP transport", () => {
     expect(response.status).toBe(404);
   });
 
-  it("completes MCP initialize and lists exactly the six agent tools", async () => {
+  it("completes MCP initialize and lists exactly the eleven agent tools", async () => {
     const { baseUrl } = await buildHarness();
     const client = await connectedClient(baseUrl);
     const { tools } = await client.listTools();
@@ -95,6 +109,11 @@ describe("loopback HTTP transport", () => {
       "agent_output",
       "agent_start",
       "agent_status",
+      "repo_list",
+      "repo_read",
+      "repo_search",
+      "session_list",
+      "session_read",
     ]);
     await client.close();
   });
@@ -105,8 +124,8 @@ describe("loopback HTTP transport", () => {
     const clientB = await connectedClient(baseUrl);
 
     const [toolsA, toolsB] = await Promise.all([clientA.listTools(), clientB.listTools()]);
-    expect(toolsA.tools.length).toBe(6);
-    expect(toolsB.tools.length).toBe(6);
+    expect(toolsA.tools.length).toBe(11);
+    expect(toolsB.tools.length).toBe(11);
 
     await clientA.close();
     await clientB.close();

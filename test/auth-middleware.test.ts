@@ -8,6 +8,7 @@ import { createCombinedVerifier } from "../src/auth/middleware.js";
 import { mountAuth } from "../src/auth/routes.js";
 import { createToolHandlers } from "../src/mcp/register-tools.js";
 import { createApp, type BridgeApp } from "../src/http/app.js";
+import { SessionStore } from "../src/sessions/session-store.js";
 import { EventLog } from "../src/store/event-log.js";
 import { TaskStore } from "../src/store/task-store.js";
 import { JobSupervisor } from "../src/supervisor/job-supervisor.js";
@@ -86,7 +87,17 @@ describe("per-tool scope enforcement", () => {
       maxConcurrentPerProvider: 1,
       maxPromptBytes: 1000,
     });
-    const handlers = createToolHandlers({ supervisor, taskStore, eventLog });
+    const handlers = createToolHandlers({
+      supervisor,
+      taskStore,
+      eventLog,
+      allowedRoots: [base],
+      sessionStore: new SessionStore({
+        allowedRoots: [base],
+        claudeProjectsDir: join(base, "claude-projects"),
+        codexSessionsDir: join(base, "codex-sessions"),
+      }),
+    });
     const readOnlyExtra = { authInfo: { token: "t", clientId: "c", scopes: ["agent:read"] } };
 
     const listResult = await handlers.agent_list({}, readOnlyExtra);
@@ -136,7 +147,17 @@ describe("loopback /mcp requires a token once auth is configured", () => {
       maxPromptBytes: 1000,
     });
     const bridgeApp = createApp(
-      { supervisor, taskStore, eventLog },
+      {
+        supervisor,
+        taskStore,
+        eventLog,
+        allowedRoots: [base],
+        sessionStore: new SessionStore({
+          allowedRoots: [base],
+          claudeProjectsDir: join(base, "claude-projects"),
+          codexSessionsDir: join(base, "codex-sessions"),
+        }),
+      },
       { auth: { verifier, requiredScopes: ["agent:read"] } },
     );
     const server = await new Promise<Server>((resolve) => {
@@ -228,7 +249,17 @@ describe("mountExtraRoutes ordering", () => {
     // mountExtraRoutes, never by reaching into `app` after createApp() has already returned,
     // since createApp's own 404 catch-all would otherwise shadow anything mounted afterward.
     const bridgeApp = createApp(
-      { supervisor, taskStore, eventLog },
+      {
+        supervisor,
+        taskStore,
+        eventLog,
+        allowedRoots: [base],
+        sessionStore: new SessionStore({
+          allowedRoots: [base],
+          claudeProjectsDir: join(base, "claude-projects"),
+          codexSessionsDir: join(base, "codex-sessions"),
+        }),
+      },
       {
         mountExtraRoutes: (app) =>
           mountAuth(app, provider, {

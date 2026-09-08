@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createToolHandlers } from "../src/mcp/register-tools.js";
 import { TOOL_DEFINITIONS, TOOL_NAMES } from "../src/mcp/tool-schemas.js";
 import type { ProviderAdapter, ProviderEvent } from "../src/providers/provider.js";
+import { SessionStore } from "../src/sessions/session-store.js";
 import { EventLog } from "../src/store/event-log.js";
 import { TaskStore } from "../src/store/task-store.js";
 import { JobSupervisor } from "../src/supervisor/job-supervisor.js";
@@ -67,7 +68,17 @@ async function buildHarness(mode: string): Promise<Harness> {
     maxPromptBytes: 1_000_000,
     gracefulTimeoutMs: 50,
   });
-  const handlers = createToolHandlers({ supervisor, taskStore, eventLog });
+  const handlers = createToolHandlers({
+    supervisor,
+    taskStore,
+    eventLog,
+    allowedRoots: [base],
+    sessionStore: new SessionStore({
+      allowedRoots: [base],
+      claudeProjectsDir: join(base, "claude-projects"),
+      codexSessionsDir: join(base, "codex-sessions"),
+    }),
+  });
   const harness = { handlers, taskStore, supervisor, cwd };
   harnesses.push(harness);
   return harness;
@@ -90,16 +101,19 @@ function textOf(result: { content: readonly { type: string; text?: string }[] })
 }
 
 describe("tool schema surface", () => {
-  it("exposes exactly six tools", () => {
-    expect(TOOL_NAMES).toEqual([
-      "agent_start",
-      "agent_list",
-      "agent_status",
-      "agent_output",
-      "agent_continue",
-      "agent_cancel",
-    ]);
-    expect(TOOL_DEFINITIONS).toHaveLength(6);
+  it("exposes exactly eleven tools", () => {
+    expect(TOOL_NAMES).toHaveLength(11);
+    expect(TOOL_NAMES).toEqual(
+      expect.arrayContaining(["repo_list", "repo_read", "repo_search", "session_list", "session_read"]),
+    );
+  });
+
+  it("marks every new tool read-only and scoped the same way as agent_list", () => {
+    const byName = Object.fromEntries(TOOL_DEFINITIONS.map((d) => [d.name, d]));
+    for (const name of ["repo_list", "repo_read", "repo_search", "session_list", "session_read"] as const) {
+      expect(byName[name]?.annotations.readOnlyHint).toBe(true);
+      expect(byName[name]?.annotations.destructiveHint).toBe(false);
+    }
   });
 
   it("marks list/status/output read-only and start/continue/cancel as writes", () => {
