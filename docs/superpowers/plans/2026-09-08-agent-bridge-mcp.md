@@ -326,23 +326,23 @@ Commit: `feat: package private agent bridge plugin`
 **Interfaces:**
 - Produces: recoverable per-user LaunchAgents and named tunnel route
 
-- [ ] **Step 1: Write failing asset tests**
+- [x] **Step 1: Write failing asset tests**
 
 Parse plists/YAML; assert loopback URL, 404 catch-all, no inline token, absolute paths, `RunAtLoad`, failure restart, and state-preserving uninstall.
 
-- [ ] **Step 2: Implement idempotent install/render/uninstall**
+- [x] **Step 2: Implement idempotent install/render/uninstall**
 
 Use strict shell mode, explicit paths, temp files + atomic rename, owner-only secret files, and exact `launchctl bootstrap/bootout` labels. Never recursively delete state.
 
-- [ ] **Step 3: Add named-tunnel flow**
+- [x] **Step 3: Add named-tunnel flow**
 
 Install `cloudflared` with Homebrew only if absent; route `mcp.markapidown.net` to `http://127.0.0.1:8787`; require final 404; never use a Quick Tunnel for completion.
 
-- [ ] **Step 4: Dry-run twice and test rollback**
+- [x] **Step 4: Dry-run twice and test rollback**
 
 Render into a temporary root, prove repeated install is stable, and prove uninstall preserves database/logs/provider sessions/tunnel credentials.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `npm test -- test/deployment-assets.test.ts && npm run verify`
 

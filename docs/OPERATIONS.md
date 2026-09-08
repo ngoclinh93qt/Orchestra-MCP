@@ -1,0 +1,112 @@
+# Operations
+
+This covers running the bridge and its tunnel as macOS background services,
+health-checking them, and rolling the whole thing back. It assumes
+`npm run verify` passes and `npm run enroll-owner` has already been run once
+(see `docs/CONNECT_CHATGPT.md` for connecting clients afterward).
+
+## Install
+
+```bash
+npm run build
+scripts/install-cloudflared.sh   # no-op if cloudflared is already on PATH
+```
+
+Before installing the tunnel LaunchAgent, complete the one-time Cloudflare
+login and named-tunnel creation (interactive; needs your Cloudflare account):
+
+```bash
+cloudflared tunnel login
+cloudflared tunnel create agent-bridge
+cp config/cloudflared.example.yml ~/.cloudflared/config.yml
+# Edit ~/.cloudflared/config.yml: fill in the real tunnel id and
+# credentials-file path that `tunnel create` printed.
+cloudflared tunnel route dns agent-bridge mcp.markapidown.net
+```
+
+Then install both LaunchAgents:
+
+```bash
+scripts/install-services.sh
+```
+
+This renders `net.markapidown.agent-bridge.plist` and
+`net.markapidown.agent-tunnel.plist` from the templates in `config/`,
+installs them into `~/Library/LaunchAgents`, and starts both immediately via
+`launchctl bootstrap`. It is idempotent — running it again cleanly restarts
+both services rather than erroring on an already-loaded label.
+
+## Health checks
+
+```bash
+# Loopback origin
+curl -s http://127.0.0.1:8787/healthz
+
+# Public hostname, through the tunnel
+curl -s https://mcp.markapidown.net/healthz
+
+# Confirm nothing but the loopback interface is actually listening
+lsof -iTCP -sTCP:LISTEN -P | grep 8787
+```
+
+A healthy tunnel with a down bridge fails the public health check without
+ever falling back to an unauthenticated path — there is no such fallback in
+`src/http/app.ts`.
+
+## Logs
+
+```bash
+tail -f ~/Library/Application\ Support/Agent\ Bridge\ MCP/logs/agent-bridge.stdout.log
+tail -f ~/Library/Application\ Support/Agent\ Bridge\ MCP/logs/agent-bridge.stderr.log
+tail -f ~/Library/Application\ Support/Agent\ Bridge\ MCP/logs/agent-tunnel.stdout.log
+```
+
+Per-task provider output lives in
+`~/Library/Application Support/Agent Bridge MCP/logs/<task-id>.jsonl`,
+separately from the two service logs above.
+
+## Restart
+
+```bash
+launchctl kickstart -k "gui/$(id -u)/net.markapidown.agent-bridge"
+launchctl kickstart -k "gui/$(id -u)/net.markapidown.agent-tunnel"
+```
+
+Both LaunchAgents restart automatically on crash (`KeepAlive.Crashed`), but
+not on a clean exit (`KeepAlive.SuccessfulExit: false`) — a deliberate exit
+(e.g. from `npm run enroll-owner`'s guidance to restart after re-enrolling)
+stays stopped until you kickstart it or reboot triggers `RunAtLoad`.
+
+## Rollback
+
+Each step here is independently reversible and none of them deletes state:
+
+```bash
+# 1. Stop and unload both services; removes the two plist files only.
+scripts/uninstall-services.sh
+
+# 2. Disable the public hostname (Cloudflare dashboard, or):
+cloudflared tunnel route dns --overwrite-dns agent-bridge <somewhere-else>
+# or delete the DNS record entirely from the Cloudflare dashboard.
+
+# 3. Remove the private plugin/connector:
+codex plugin remove agent-bridge
+# and disconnect the custom connector in ChatGPT's own workspace settings.
+```
+
+None of the above touches `~/Library/Application Support/Agent Bridge MCP/`
+(the SQLite database and event logs) or `~/.cloudflared/` (the tunnel
+credentials). Delete those yourself only if you actually want to discard
+task history or the tunnel's identity.
+
+## Verifying a deployment end to end
+
+```bash
+npm run verify
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8787/healthz
+curl -s -o /dev/null -w '%{http_code}\n' https://mcp.markapidown.net/healthz
+curl -s -o /dev/null -w '%{http_code}\n' -X POST https://mcp.markapidown.net/mcp \
+  -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+# ^ expect 401: unauthenticated tool calls must be rejected, even over the tunnel.
+```

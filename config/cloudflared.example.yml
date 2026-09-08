@@ -1,0 +1,21 @@
+# Example named-tunnel config for the Agent Bridge MCP. Copy this to
+# ~/.cloudflared/config.yml (or point --config at a copy of it elsewhere) after
+# `cloudflared tunnel login` and `cloudflared tunnel create agent-bridge` have
+# produced a real tunnel id and credentials file. Never use a Quick Tunnel
+# (`cloudflared tunnel --url ...`) for the completed setup — it gets a random
+# hostname on every run and cannot be the thing ChatGPT is configured against.
+#
+# Replace TUNNEL_ID and the credentials-file path with the real values
+# `cloudflared tunnel create` prints. Do not commit the real values or the
+# credentials JSON file to version control.
+
+tunnel: TUNNEL_ID
+credentials-file: /Users/YOUR_USERNAME/.cloudflared/TUNNEL_ID.json
+
+ingress:
+  # The only route: the public hostname forwards to the bridge's loopback port.
+  - hostname: mcp.markapidown.net
+    service: http://127.0.0.1:8787
+  # Required catch-all: any other request gets a plain 404, never falls through
+  # to an unauthenticated default.
+  - service: http_status:404
