@@ -114,6 +114,18 @@ export class TaskStore {
     return next;
   }
 
+  /** Records the provider's session id without asserting any state transition. */
+  updateProviderSessionId(id: string, providerSessionId: string): BridgeTask {
+    const current = this.get(id);
+    if (!current) throw new TaskNotFoundError(id);
+    this.db
+      .prepare(`UPDATE tasks SET provider_session_id = @providerSessionId, updated_at = @updatedAt WHERE id = @id`)
+      .run({ id, providerSessionId, updatedAt: new Date().toISOString() });
+    const next = this.get(id);
+    if (!next) throw new TaskNotFoundError(id);
+    return next;
+  }
+
   list(filter: ListFilter = {}): BridgeTask[] {
     const clauses: string[] = [];
     const params: Record<string, unknown> = {};

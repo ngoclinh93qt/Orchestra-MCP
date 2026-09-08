@@ -125,7 +125,7 @@ Commit: `feat: persist bridge tasks and events`
 **Interfaces:**
 - Produces: `ProviderAdapter`, `ProviderInvocation`, `JobSupervisor`
 
-- [ ] **Step 1: Define the adapter contract and failing lifecycle tests**
+- [x] **Step 1: Define the adapter contract and failing lifecycle tests**
 
 ```ts
 export type ProviderInvocation = Readonly<{
@@ -143,15 +143,15 @@ export interface ProviderAdapter {
 
 Test success, failure, malformed output, cancellation, concurrency limits, `shell:false`, and prompt metacharacters.
 
-- [ ] **Step 2: Confirm red**
+- [x] **Step 2: Confirm red**
 
 Run: `npm test -- test/job-supervisor.test.ts`
 
-- [ ] **Step 3: Implement exact-child ownership**
+- [x] **Step 3: Implement exact-child ownership**
 
 Spawn a detached process group, write stdin, parse both streams, and persist observed lifecycle. Cancel with SIGTERM, wait five seconds, then SIGKILL only that exact group.
 
-- [ ] **Step 4: Add bounds/restart reconciliation and verify**
+- [x] **Step 4: Add bounds/restart reconciliation and verify**
 
 Limit one active task/provider, two total, and configured prompt bytes. Return immediately from start/continue; mark unsupervised old running tasks interrupted.
 

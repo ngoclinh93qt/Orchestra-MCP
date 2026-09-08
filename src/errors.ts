@@ -18,3 +18,31 @@ export class IllegalTaskTransitionError extends Error {
     this.name = "IllegalTaskTransitionError";
   }
 }
+
+export class ConcurrencyLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ConcurrencyLimitError";
+  }
+}
+
+export class PromptTooLargeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PromptTooLargeError";
+  }
+}
+
+export class ProviderUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProviderUnavailableError";
+  }
+}
+
+export class TaskNotResumableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TaskNotResumableError";
+  }
+}
