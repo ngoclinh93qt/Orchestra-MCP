@@ -1,3 +1,4 @@
+import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { BridgeTask, Provider, TaskState } from "../domain/task.js";
@@ -40,6 +41,25 @@ function jsonResult(value: unknown): CallToolResult {
 
 function errorResult(error: Error): CallToolResult {
   return { isError: true, content: [{ type: "text", text: error.message }] };
+}
+
+/** Extra context an MCP tool callback receives; only the auth info matters here. */
+export interface ToolExtra {
+  readonly authInfo?: AuthInfo;
+}
+
+/**
+ * When no auth is wired at all (authInfo undefined — e.g. a loopback dev setup with no OAuth
+ * configured), access is unrestricted. When a token IS present, it must actually carry the
+ * scope: this is what makes a read-only token unable to call a write tool.
+ */
+function hasScope(extra: ToolExtra | undefined, scope: string): boolean {
+  if (!extra?.authInfo) return true;
+  return extra.authInfo.scopes.includes(scope);
+}
+
+function insufficientScope(scope: string): CallToolResult {
+  return errorResult(new Error(`Insufficient scope: ${scope} required`));
 }
 
 /**
@@ -111,7 +131,8 @@ export interface AgentCancelArgs {
  */
 export function createToolHandlers(deps: RegisterToolsDeps) {
   return {
-    async agent_start(args: AgentStartArgs): Promise<CallToolResult> {
+    async agent_start(args: AgentStartArgs, extra?: ToolExtra): Promise<CallToolResult> {
+      if (!hasScope(extra, "agent:write")) return insufficientScope("agent:write");
       try {
         const task = await deps.supervisor.start(args);
         return jsonResult(toSummary(task));
@@ -121,25 +142,29 @@ export function createToolHandlers(deps: RegisterToolsDeps) {
       }
     },
 
-    async agent_list(args: AgentListArgs): Promise<CallToolResult> {
+    async agent_list(args: AgentListArgs, extra?: ToolExtra): Promise<CallToolResult> {
+      if (!hasScope(extra, "agent:read")) return insufficientScope("agent:read");
       const tasks = deps.taskStore.list(args);
       return jsonResult({ tasks: tasks.map(toSummary) });
     },
 
-    async agent_status(args: AgentStatusArgs): Promise<CallToolResult> {
+    async agent_status(args: AgentStatusArgs, extra?: ToolExtra): Promise<CallToolResult> {
+      if (!hasScope(extra, "agent:read")) return insufficientScope("agent:read");
       const task = deps.taskStore.get(args.taskId);
       if (!task) return errorResult(new TaskNotFoundError(args.taskId));
       return jsonResult(toSummary(task));
     },
 
-    async agent_output(args: AgentOutputArgs): Promise<CallToolResult> {
+    async agent_output(args: AgentOutputArgs, extra?: ToolExtra): Promise<CallToolResult> {
+      if (!hasScope(extra, "agent:read")) return insufficientScope("agent:read");
       const task = deps.taskStore.get(args.taskId);
       if (!task) return errorResult(new TaskNotFoundError(args.taskId));
       const page = deps.eventLog.read(args.taskId, { cursor: args.cursor ?? 0, limit: args.limit ?? 50 });
       return jsonResult(page);
     },
 
-    async agent_continue(args: AgentContinueArgs): Promise<CallToolResult> {
+    async agent_continue(args: AgentContinueArgs, extra?: ToolExtra): Promise<CallToolResult> {
+      if (!hasScope(extra, "agent:write")) return insufficientScope("agent:write");
       try {
         const child = await deps.supervisor.continue(args);
         return jsonResult(toSummary(child));
@@ -149,7 +174,8 @@ export function createToolHandlers(deps: RegisterToolsDeps) {
       }
     },
 
-    async agent_cancel(args: AgentCancelArgs): Promise<CallToolResult> {
+    async agent_cancel(args: AgentCancelArgs, extra?: ToolExtra): Promise<CallToolResult> {
+      if (!hasScope(extra, "agent:write")) return insufficientScope("agent:write");
       try {
         const task = deps.supervisor.cancel(args.taskId);
         return jsonResult(toSummary(task));
@@ -176,7 +202,10 @@ export function registerTools(server: McpServer, deps: RegisterToolsDeps): void 
       },
       // Each handler's args type matches its own schema; the registry only needs a uniform
       // callable, and every branch above is exercised directly by tool-handler unit tests.
-      handlers[definition.name as ToolName] as (args: Record<string, unknown>) => Promise<CallToolResult>,
+      handlers[definition.name as ToolName] as (
+        args: Record<string, unknown>,
+        extra: ToolExtra,
+      ) => Promise<CallToolResult>,
     );
   }
 }

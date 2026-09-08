@@ -241,27 +241,27 @@ Commit: `feat: expose agent control over MCP`
 **Interfaces:**
 - Produces: MCP OAuth discovery/registration/authorization/token/revoke endpoints; `agent:read`, `agent:write`; loopback bearer verification
 
-- [ ] **Step 1: Write failing OAuth protocol tests**
+- [x] **Step 1: Write failing OAuth protocol tests**
 
 Cover metadata, dynamic registration, Authorization Code + S256 PKCE, exact redirect URIs, one-time codes, expiry, refresh rotation/replay rejection, scope narrowing, and revoke.
 
-- [ ] **Step 2: Write failing security tests**
+- [x] **Step 2: Write failing security tests**
 
 Assert no plaintext bearer material in SQLite/logs; correct 401 responses; auth failure rate limiting; read scope cannot call writes; localhost without a token is rejected.
 
-- [ ] **Step 3: Confirm red**
+- [x] **Step 3: Confirm red**
 
 Run: `npm test -- test/oauth.test.ts test/auth-middleware.test.ts`
 
-- [ ] **Step 4: Implement secure storage and enrollment**
+- [x] **Step 4: Implement secure storage and enrollment**
 
 Use 256-bit entropy, SHA-256 token lookup, constant-time comparison, UTC expiries, code binding to client/redirect/scope/PKCE, and transactional refresh rotation. `npm run enroll-owner` prints one recovery code once and writes mode-0600 state.
 
-- [ ] **Step 5: Enforce scopes in middleware and tool handlers**
+- [x] **Step 5: Enforce scopes in middleware and tool handlers**
 
 Keep `/healthz` public and data-free. OAuth tokens and explicit local bearer tokens take precedence over all unauthenticated access.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Run: `npm test -- test/oauth.test.ts test/auth-middleware.test.ts test/mcp-tools.test.ts`
 

@@ -1,14 +1,31 @@
+import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
+import type { OAuthTokenVerifier } from "@modelcontextprotocol/sdk/server/auth/provider.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { randomUUID } from "node:crypto";
-import express, { type Express, type Request, type Response } from "express";
+import express, { type Express, type RequestHandler, type Request, type Response } from "express";
 import { registerTools, type RegisterToolsDeps } from "../mcp/register-tools.js";
+
+export interface CreateAppAuthOptions {
+  readonly verifier: OAuthTokenVerifier;
+  /** Scopes every /mcp request must carry. Per-tool write-scope checks happen in the handlers. */
+  readonly requiredScopes?: readonly string[];
+  readonly resourceMetadataUrl?: URL;
+}
 
 export interface CreateAppOptions {
   /** Caps the JSON request body accepted at /mcp. Defaults to 1 MiB. */
   readonly maxRequestBytes?: number;
   readonly serverInfo?: { readonly name: string; readonly version: string };
+  /** When provided, every /mcp request must carry a valid bearer token. Omit for loopback-only, unauthenticated dev use. */
+  readonly auth?: CreateAppAuthOptions;
+  /**
+   * Called with the app after /healthz and /mcp are registered but before the catch-all 404
+   * handler, so a caller (main.ts, tests) can mount additional routers — e.g. the OAuth
+   * discovery/registration/token endpoints — without those routes ever falling through.
+   */
+  readonly mountExtraRoutes?: (app: Express) => void;
 }
 
 export interface BridgeApp {
@@ -89,9 +106,22 @@ export function createApp(deps: RegisterToolsDeps, options: CreateAppOptions = {
     await transport.handleRequest(req, res);
   };
 
-  app.post("/mcp", mcpPostHandler);
-  app.get("/mcp", mcpSessionHandler);
-  app.delete("/mcp", mcpSessionHandler);
+  const authMiddleware: RequestHandler | undefined = options.auth
+    ? requireBearerAuth({
+        verifier: options.auth.verifier,
+        ...(options.auth.requiredScopes ? { requiredScopes: [...options.auth.requiredScopes] } : {}),
+        ...(options.auth.resourceMetadataUrl
+          ? { resourceMetadataUrl: options.auth.resourceMetadataUrl.toString() }
+          : {}),
+      })
+    : undefined;
+  const mcpMiddleware: RequestHandler[] = authMiddleware ? [authMiddleware] : [];
+
+  app.post("/mcp", ...mcpMiddleware, mcpPostHandler);
+  app.get("/mcp", ...mcpMiddleware, mcpSessionHandler);
+  app.delete("/mcp", ...mcpMiddleware, mcpSessionHandler);
+
+  options.mountExtraRoutes?.(app);
 
   app.use((_req, res) => {
     res.status(404).json({ error: "not found" });

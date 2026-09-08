@@ -140,7 +140,9 @@ export class TaskStore {
     const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
     const limit = filter.limit ?? 50;
     const rows = this.db
-      .prepare(`SELECT * FROM tasks ${where} ORDER BY created_at DESC, id DESC LIMIT @limit`)
+      // rowid (insertion order), not id (a random UUID), breaks ties within the same
+      // created_at millisecond in actual creation order.
+      .prepare(`SELECT * FROM tasks ${where} ORDER BY created_at DESC, rowid DESC LIMIT @limit`)
       .all({ ...params, limit }) as TaskRow[];
     return rows.map(rowToTask);
   }

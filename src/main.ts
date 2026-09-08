@@ -1,6 +1,10 @@
 import { join } from "node:path";
+import { BridgeOAuthProvider } from "./auth/oauth-provider.js";
+import { OAuthStore } from "./auth/oauth-store.js";
+import { createCombinedVerifier } from "./auth/middleware.js";
+import { mountAuth } from "./auth/routes.js";
 import { loadConfig } from "./config.js";
-import { createApp } from "./http/app.js";
+import { createApp, type CreateAppAuthOptions } from "./http/app.js";
 import { ClaudeAdapter } from "./providers/claude.js";
 import { CodexAdapter } from "./providers/codex.js";
 import { EventLog } from "./store/event-log.js";
@@ -12,6 +16,7 @@ function main(): void {
 
   const taskStore = new TaskStore(join(config.stateDir, "bridge.sqlite3"));
   const eventLog = new EventLog(join(config.stateDir, "logs"));
+  const oauthStore = new OAuthStore(join(config.stateDir, "bridge.sqlite3"));
 
   const supervisor = new JobSupervisor({
     taskStore,
@@ -29,9 +34,33 @@ function main(): void {
     console.log(`Marked ${interrupted} unsupervised active task(s) as interrupted after restart.`);
   }
 
+  let auth: CreateAppAuthOptions | undefined;
+  const oauthProvider = oauthStore.isEnrolled() ? new BridgeOAuthProvider(oauthStore) : undefined;
+  if (oauthProvider) {
+    auth = { verifier: createCombinedVerifier(oauthStore, oauthProvider), requiredScopes: ["agent:read"] };
+  } else {
+    // eslint-disable-next-line no-console
+    console.warn(
+      "No owner enrolled yet: /mcp is unauthenticated. Run `npm run enroll-owner` before exposing this " +
+        "bridge beyond loopback.",
+    );
+  }
+
   const { app, shutdown: shutdownTransports } = createApp(
     { supervisor, taskStore, eventLog },
-    { maxRequestBytes: config.maxPromptBytes },
+    {
+      maxRequestBytes: config.maxPromptBytes,
+      ...(auth ? { auth } : {}),
+      ...(oauthProvider
+        ? {
+            mountExtraRoutes: (mountedApp) =>
+              mountAuth(mountedApp, oauthProvider, {
+                issuerUrl: config.publicUrl,
+                resourceServerUrl: config.publicUrl,
+              }),
+          }
+        : {}),
+    },
   );
 
   const server = app.listen(config.port, config.host, () => {
@@ -49,6 +78,7 @@ function main(): void {
     await shutdownTransports();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     taskStore.close();
+    oauthStore.close();
     process.exit(0);
   }
 
