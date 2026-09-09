@@ -124,11 +124,10 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   },
   {
     name: "repo_search",
-    description: "Search for a literal string or regular expression across an allowlisted path, bounded to a result limit.",
+    description: "Search for a literal substring across an allowlisted path, bounded to a result limit.",
     inputSchema: {
       path: z.string().min(1).describe("Absolute path inside an allowlisted root to search under"),
       query: z.string().min(1),
-      regex: z.boolean().optional(),
       limit: z.number().int().positive().max(200).optional(),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },

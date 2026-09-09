@@ -9,7 +9,6 @@ import {
   PathNotAllowedError,
   PromptTooLargeError,
   ProviderUnavailableError,
-  SearchTimeoutError,
   TaskNotFoundError,
   TaskNotResumableError,
 } from "../errors.js";
@@ -36,7 +35,6 @@ const EXPECTED_ERROR_TYPES = [
   PathNotAllowedError,
   PromptTooLargeError,
   ProviderUnavailableError,
-  SearchTimeoutError,
   TaskNotFoundError,
   TaskNotResumableError,
 ];
@@ -151,7 +149,6 @@ export interface RepoReadArgs {
 export interface RepoSearchArgs {
   readonly path: string;
   readonly query: string;
-  readonly regex?: boolean;
   readonly limit?: number;
 }
 
@@ -260,7 +257,6 @@ export function createToolHandlers(deps: RegisterToolsDeps) {
       if (!hasScope(extra, "agent:read")) return insufficientScope("agent:read");
       try {
         const result = await searchRepo(args.path, deps.allowedRoots, args.query, {
-          ...(args.regex !== undefined ? { regex: args.regex } : {}),
           ...(args.limit !== undefined ? { limit: args.limit } : {}),
         });
         return jsonResult(result);

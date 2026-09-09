@@ -2,12 +2,7 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  BinaryFileError,
-  FileTooLargeError,
-  PathNotAllowedError,
-  SearchTimeoutError,
-} from "../../src/errors.js";
+import { BinaryFileError, FileTooLargeError, PathNotAllowedError } from "../../src/errors.js";
 import { listDirectory, readFileLines, searchRepo } from "../../src/repo/repo-reader.js";
 
 async function buildFixtureRepo(): Promise<{ base: string; root: string }> {
@@ -133,13 +128,6 @@ describe("searchRepo", () => {
     expect(result.truncated).toBe(false);
   });
 
-  it("supports a regex query", async () => {
-    const { root } = await buildFixtureRepo();
-    const result = await searchRepo(root, [root], "total\\s*=", { regex: true });
-    expect(result.matches).toHaveLength(1);
-    expect(result.matches[0]?.file).toBe("src/index.ts");
-  });
-
   it("never searches inside ignored directories", async () => {
     const { root } = await buildFixtureRepo();
     const result = await searchRepo(root, [root], "module.exports", {});
@@ -154,11 +142,6 @@ describe("searchRepo", () => {
     const result = await searchRepo(root, [root], "needle", { limit: 2 });
     expect(result.matches).toHaveLength(2);
     expect(result.truncated).toBe(true);
-  });
-
-  it("rejects an invalid regex", async () => {
-    const { root } = await buildFixtureRepo();
-    await expect(searchRepo(root, [root], "(", { regex: true })).rejects.toThrow();
   });
 
   it("rejects being pointed directly at an ignored directory", async () => {
@@ -176,58 +159,6 @@ describe("searchRepo", () => {
     await expect(searchRepo(join(root, "no-such-dir"), [root], "anything", {})).rejects.toBeInstanceOf(
       PathNotAllowedError,
     );
-  });
-
-  it("rejects a nested-quantifier regex immediately instead of backtracking catastrophically", async () => {
-    const { root } = await buildFixtureRepo();
-    // A line that cannot match, which is what makes (a+)+$ pathological. Before the fix this
-    // exact shape blocked the single-threaded server for minutes on a tiny file.
-    await writeFile(join(root, "pathological.txt"), `${"a".repeat(33)}!\n`);
-    const started = Date.now();
-    await expect(searchRepo(root, [root], "(a+)+$", { regex: true, limit: 1 })).rejects.toBeInstanceOf(
-      SearchTimeoutError,
-    );
-    expect(Date.now() - started).toBeLessThan(2000);
-  });
-
-  it("completes a benign multi-thousand-line regex search quickly (regression for per-line vm context creation)", async () => {
-    const { root } = await buildFixtureRepo();
-    // 3000 lines that never match, so the search must scan every single line under the regex
-    // path rather than short-circuiting on an early hit. Before the fix, safeRegexTest created a
-    // brand-new vm context per line (~4000x the cost of a plain RegExp.test), which made even this
-    // benign, non-catastrophic search take multiple seconds; after hoisting context creation to
-    // once per searchRepo call, this should complete in well under a second.
-    const lines: string[] = [];
-    for (let i = 0; i < 3000; i += 1) {
-      lines.push(`line number ${i} contains ordinary, benign content with no secrets`);
-    }
-    await writeFile(join(root, "big.txt"), `${lines.join("\n")}\n`);
-
-    const started = Date.now();
-    const result = await searchRepo(root, [root], "no-such-token-[0-9]{4}-present", {
-      regex: true,
-      limit: 1_000_000,
-    });
-    const elapsed = Date.now() - started;
-
-    expect(result.matches).toHaveLength(0);
-    expect(result.truncated).toBe(false);
-    // Generous enough not to be flaky on a slow CI box (measured 200-700ms across runs in this
-    // repo's own vitest environment), tight enough to catch a per-line context-creation
-    // regression, which pushed the equivalent search to 4-5x this cost (multiple seconds).
-    expect(elapsed).toBeLessThan(2000);
-  });
-
-  it("bounds a catastrophic pattern that the static pre-check does not catch", async () => {
-    const { root } = await buildFixtureRepo();
-    // (a|a)+$ has no nested quantifier inside the group, so it slips past hasObviousCatastrophicShape
-    // and must be stopped by the vm execution timeout instead.
-    await writeFile(join(root, "pathological2.txt"), `${"a".repeat(40)}!\n`);
-    const started = Date.now();
-    await expect(searchRepo(root, [root], "(a|a)+$", { regex: true, limit: 1 })).rejects.toBeInstanceOf(
-      SearchTimeoutError,
-    );
-    expect(Date.now() - started).toBeLessThan(5000);
   });
 
   it("skips an oversized file but still finds matches in normal files", async () => {
