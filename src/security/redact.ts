@@ -20,11 +20,23 @@ const SECRET_LINE_PATTERN = new RegExp(`\\b(${SECRET_KEY_FRAGMENT})(\\s*[:=]{1}(
 
 /**
  * Unquoted assignment shapes — env files outside `.env*`, YAML, `.npmrc`-style config. Deliberately
- * narrower than the quoted pattern: the value must be at least 8 characters of non-space,
- * non-quote, non-semicolon text, which is what keeps ordinary source code (`= true;`, `=== other`)
- * from being corrupted. The `(?!=)` lookahead in the separator is what stops `===` matching.
+ * narrower than the quoted pattern in two ways, both needed to keep ordinary source code from being
+ * corrupted:
+ *
+ *  - The value's character class is restricted to plausible bare-token characters (letters, digits,
+ *    `_ - . / : +`). Parens, commas, brackets, and braces are excluded because those only show up in
+ *    code syntax (`path.join(dir, name)`, `line.split(",")`), never in a bare secret value.
+ *  - The value must be immediately followed by a natural statement-ending context — optional
+ *    whitespace then `;`, `,`, `)`, `]`, `}`, or end of line — rather than matching mid-expression.
+ *    This is what rejects `secretPath = path.join(dir, name)`: the greedy value run stops before the
+ *    `(`, and `(` is not an accepted terminator, so the whole match is rejected.
+ *
+ * The `(?!=)` lookahead in the separator is what stops `===` matching.
  */
-const UNQUOTED_SECRET_PATTERN = new RegExp(`\\b(${SECRET_KEY_FRAGMENT})(\\s*[:=]{1}(?!=)\\s*)([^\\s'";]{8,})`, "gi");
+const UNQUOTED_SECRET_PATTERN = new RegExp(
+  `\\b(${SECRET_KEY_FRAGMENT})(\\s*[:=]{1}(?!=)\\s*)([A-Za-z0-9_.\\-/:+]{8,})(?=\\s*(?:[;,)\\]}]|$))`,
+  "gi",
+);
 
 const SAFE_UNQUOTED_LITERALS = new Set(["true", "false", "null", "undefined"]);
 
