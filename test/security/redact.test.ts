@@ -120,6 +120,18 @@ describe("redactTextLine", () => {
     });
   });
 
+  describe("regression: base64-padded and comment-terminated values now redact", () => {
+    it("redacts a base64-padded value ending in ==", () => {
+      expect(redactTextLine("token: YWJjZGVmZ2hpamtsbW5vcA==")).toContain("[REDACTED]");
+    });
+
+    it("redacts a value followed by a # comment, leaving the comment untouched", () => {
+      expect(redactTextLine("AUTH_TOKEN=abc123secretvalue # production token")).toBe(
+        "AUTH_TOKEN=[REDACTED] # production token",
+      );
+    });
+  });
+
   describe("positive cases the unquoted pattern exists to catch still redact", () => {
     it("redacts an unquoted YAML-style secret", () => {
       expect(redactTextLine("api_key: sk-live-UNQUOTED-SECRET")).toBe("api_key: [REDACTED]");

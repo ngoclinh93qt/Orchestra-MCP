@@ -91,13 +91,24 @@ Every returned line passes through the existing redaction pass.
 
 ### `repo_search`
 
-Input: a query (literal substring or regular expression, `regex: boolean`),
-an optional starting path (defaults to allowed roots), a result cap (default
-50, hard max 200). Output: matches as `{file, line, text}`, each `text`
-truncated to a bounded length and redacted. Implemented as a pure Node
-directory walk honoring the same ignore list as `repo_list` — no external
-process, no `ripgrep` dependency. Walks are bounded by the same result cap so
-a query that would match thousands of lines still returns promptly.
+Input: a literal substring query, an optional starting path (defaults to
+allowed roots), a result cap (default 50, hard max 200). Output: matches as
+`{file, line, text}`, each `text` truncated to a bounded length and redacted.
+Implemented as a pure Node directory walk honoring the same ignore list as
+`repo_list` — no external process, no `ripgrep` dependency. `String.includes`
+has no backtracking risk and is fast even over a very large tree, so no
+separate scan budget is needed for it.
+
+Regex mode was attempted during implementation (with static rejection of the
+classic nested-quantifier ReDoS shape, then a `node:vm`-based per-line
+execution timeout once the static check proved incomplete), but a final
+review found an unresolvable-in-scope risk: there was no cap on total
+lines/files scanned per call independent of the match `limit`, so an
+ordinary, non-adversarial regex search that doesn't match early — the common
+case, not an edge case — could still block the single-threaded server for
+70-90 seconds over a large directory tree. Rather than ship regex support in
+a still-partially-safe state, it was deferred and removed; only literal
+substring search ships for now.
 
 ### `session_list`
 
@@ -162,7 +173,7 @@ finished/not-finished answer must use `agent_start`/`agent_continue` and
   cases.
 - `repo_read`: pagination correctness, binary-file refusal, redaction of
   secret-looking lines, cursor past end-of-file.
-- `repo_search`: literal and regex matches, result cap enforcement, ignore
+- `repo_search`: literal substring matches, result cap enforcement, ignore
   list honored, no external process spawned.
 - Session discovery: cwd extracted from content (not directory name) for a
   fixture Claude Code project directory and a fixture Codex rollout;

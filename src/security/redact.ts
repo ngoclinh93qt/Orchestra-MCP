@@ -24,17 +24,19 @@ const SECRET_LINE_PATTERN = new RegExp(`\\b(${SECRET_KEY_FRAGMENT})(\\s*[:=]{1}(
  * corrupted:
  *
  *  - The value's character class is restricted to plausible bare-token characters (letters, digits,
- *    `_ - . / : +`). Parens, commas, brackets, and braces are excluded because those only show up in
- *    code syntax (`path.join(dir, name)`, `line.split(",")`), never in a bare secret value.
+ *    `_ - . / : +`), optionally followed by `=` or `==` base64 padding. Parens, commas, brackets, and
+ *    braces are excluded because those only show up in code syntax (`path.join(dir, name)`,
+ *    `line.split(",")`), never in a bare secret value.
  *  - The value must be immediately followed by a natural statement-ending context — optional
- *    whitespace then `;`, `,`, `)`, `]`, `}`, or end of line — rather than matching mid-expression.
- *    This is what rejects `secretPath = path.join(dir, name)`: the greedy value run stops before the
- *    `(`, and `(` is not an accepted terminator, so the whole match is rejected.
+ *    whitespace then `;`, `,`, `)`, `]`, `}`, a `#` or `//` comment marker, or end of line — rather
+ *    than matching mid-expression. This is what rejects `secretPath = path.join(dir, name)`: the
+ *    greedy value run stops before the `(`, and `(` is not an accepted terminator, so the whole
+ *    match is rejected.
  *
  * The `(?!=)` lookahead in the separator is what stops `===` matching.
  */
 const UNQUOTED_SECRET_PATTERN = new RegExp(
-  `\\b(${SECRET_KEY_FRAGMENT})(\\s*[:=]{1}(?!=)\\s*)([A-Za-z0-9_.\\-/:+]{8,})(?=\\s*(?:[;,)\\]}]|$))`,
+  `\\b(${SECRET_KEY_FRAGMENT})(\\s*[:=]{1}(?!=)\\s*)([A-Za-z0-9_.\\-/:+]{8,}={0,2})(?=\\s*(?:[;,)\\]}]|#|//|$))`,
   "gi",
 );
 
