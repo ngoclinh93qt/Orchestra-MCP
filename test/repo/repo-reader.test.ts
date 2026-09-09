@@ -190,6 +190,34 @@ describe("searchRepo", () => {
     expect(Date.now() - started).toBeLessThan(2000);
   });
 
+  it("completes a benign multi-thousand-line regex search quickly (regression for per-line vm context creation)", async () => {
+    const { root } = await buildFixtureRepo();
+    // 3000 lines that never match, so the search must scan every single line under the regex
+    // path rather than short-circuiting on an early hit. Before the fix, safeRegexTest created a
+    // brand-new vm context per line (~4000x the cost of a plain RegExp.test), which made even this
+    // benign, non-catastrophic search take multiple seconds; after hoisting context creation to
+    // once per searchRepo call, this should complete in well under a second.
+    const lines: string[] = [];
+    for (let i = 0; i < 3000; i += 1) {
+      lines.push(`line number ${i} contains ordinary, benign content with no secrets`);
+    }
+    await writeFile(join(root, "big.txt"), `${lines.join("\n")}\n`);
+
+    const started = Date.now();
+    const result = await searchRepo(root, [root], "no-such-token-[0-9]{4}-present", {
+      regex: true,
+      limit: 1_000_000,
+    });
+    const elapsed = Date.now() - started;
+
+    expect(result.matches).toHaveLength(0);
+    expect(result.truncated).toBe(false);
+    // Generous enough not to be flaky on a slow CI box (measured 200-700ms across runs in this
+    // repo's own vitest environment), tight enough to catch a per-line context-creation
+    // regression, which pushed the equivalent search to 4-5x this cost (multiple seconds).
+    expect(elapsed).toBeLessThan(2000);
+  });
+
   it("bounds a catastrophic pattern that the static pre-check does not catch", async () => {
     const { root } = await buildFixtureRepo();
     // (a|a)+$ has no nested quantifier inside the group, so it slips past hasObviousCatastrophicShape
