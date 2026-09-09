@@ -2,7 +2,11 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { listClaudeSessions, readClaudeSession } from "../../src/sessions/claude-sessions.js";
+import {
+  getClaudeSessionCwd,
+  listClaudeSessions,
+  readClaudeSession,
+} from "../../src/sessions/claude-sessions.js";
 
 async function buildFixtureProjectsDir(): Promise<string> {
   const baseDir = await mkdtemp(join(tmpdir(), "claude-projects-"));
@@ -37,6 +41,34 @@ describe("listClaudeSessions", () => {
     const baseDir = await buildFixtureProjectsDir();
     const sessions = await listClaudeSessions(baseDir);
     expect(sessions.some((s) => s.sessionId === "session-2")).toBe(false);
+  });
+});
+
+describe("getClaudeSessionCwd", () => {
+  it("returns the cwd for an existing session", async () => {
+    const baseDir = await buildFixtureProjectsDir();
+    await expect(getClaudeSessionCwd(baseDir, "session-1")).resolves.toBe("/Users/thief/nik/demo");
+  });
+
+  it("returns null for a session that does not exist", async () => {
+    const baseDir = await buildFixtureProjectsDir();
+    await expect(getClaudeSessionCwd(baseDir, "no-such-session")).resolves.toBeNull();
+  });
+
+  it("returns null when the session has no determinable cwd", async () => {
+    const baseDir = await buildFixtureProjectsDir();
+    await expect(getClaudeSessionCwd(baseDir, "session-2")).resolves.toBeNull();
+  });
+
+  it("agrees with the cwd listClaudeSessions reports", async () => {
+    const baseDir = await buildFixtureProjectsDir();
+    const listed = (await listClaudeSessions(baseDir)).find((s) => s.sessionId === "session-1");
+    await expect(getClaudeSessionCwd(baseDir, "session-1")).resolves.toBe(listed?.cwd);
+  });
+
+  it("does not resolve a traversal-shaped sessionId", async () => {
+    const baseDir = await buildFixtureProjectsDir();
+    await expect(getClaudeSessionCwd(baseDir, "../-some-other-project/session-2")).resolves.toBeNull();
   });
 });
 

@@ -2,7 +2,12 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { BinaryFileError, PathNotAllowedError } from "../../src/errors.js";
+import {
+  BinaryFileError,
+  FileTooLargeError,
+  PathNotAllowedError,
+  SearchTimeoutError,
+} from "../../src/errors.js";
 import { listDirectory, readFileLines, searchRepo } from "../../src/repo/repo-reader.js";
 
 async function buildFixtureRepo(): Promise<{ base: string; root: string }> {
@@ -29,6 +34,28 @@ describe("listDirectory", () => {
   it("rejects a path outside the allowed roots", async () => {
     const { base, root } = await buildFixtureRepo();
     await expect(listDirectory(base, [root], {})).rejects.toBeInstanceOf(PathNotAllowedError);
+  });
+
+  it("rejects being pointed directly at node_modules", async () => {
+    const { root } = await buildFixtureRepo();
+    await expect(listDirectory(join(root, "node_modules"), [root], {})).rejects.toBeInstanceOf(PathNotAllowedError);
+  });
+
+  it("rejects being pointed directly at .git", async () => {
+    const { root } = await buildFixtureRepo();
+    await expect(listDirectory(join(root, ".git"), [root], {})).rejects.toBeInstanceOf(PathNotAllowedError);
+  });
+
+  it("rejects a nested path under an ignored directory", async () => {
+    const { root } = await buildFixtureRepo();
+    await expect(listDirectory(join(root, "node_modules", "left-pad"), [root], {})).rejects.toBeInstanceOf(
+      PathNotAllowedError,
+    );
+  });
+
+  it("wraps a nonexistent directory's raw ENOENT into a typed error", async () => {
+    const { root } = await buildFixtureRepo();
+    await expect(listDirectory(join(root, "no-such-dir"), [root], {})).rejects.toBeInstanceOf(PathNotAllowedError);
   });
 });
 
@@ -64,6 +91,36 @@ describe("readFileLines", () => {
   it("wraps a nonexistent file's raw ENOENT into a typed error", async () => {
     const { root } = await buildFixtureRepo();
     await expect(readFileLines(join(root, "does-not-exist.ts"), [root], {})).rejects.toBeInstanceOf(PathNotAllowedError);
+  });
+
+  it("refuses to read a file inside .git even though it is in an allowed root", async () => {
+    const { root } = await buildFixtureRepo();
+    const gitConfig = join(root, ".git", "config");
+    await writeFile(gitConfig, '[credential]\n\thelper = store\n\tpassword = hunter2supersecret\n');
+    await expect(readFileLines(gitConfig, [root], {})).rejects.toBeInstanceOf(PathNotAllowedError);
+  });
+
+  it("refuses to read a file inside node_modules", async () => {
+    const { root } = await buildFixtureRepo();
+    await expect(
+      readFileLines(join(root, "node_modules", "left-pad", "index.js"), [root], {}),
+    ).rejects.toBeInstanceOf(PathNotAllowedError);
+  });
+
+  it("refuses a file larger than the read size cap", async () => {
+    const { root } = await buildFixtureRepo();
+    const bigPath = join(root, "huge.log");
+    // 5 MB cap; write just over it. Non-binary content, so only the size check can reject it.
+    await writeFile(bigPath, "x".repeat(5 * 1024 * 1024 + 1));
+    await expect(readFileLines(bigPath, [root], {})).rejects.toBeInstanceOf(FileTooLargeError);
+  });
+
+  it("still reads a file comfortably under the size cap", async () => {
+    const { root } = await buildFixtureRepo();
+    const okPath = join(root, "medium.log");
+    await writeFile(okPath, "line one\nline two\n");
+    const page = await readFileLines(okPath, [root], {});
+    expect(page.lines).toEqual(["line one", "line two"]);
   });
 });
 
@@ -102,6 +159,56 @@ describe("searchRepo", () => {
   it("rejects an invalid regex", async () => {
     const { root } = await buildFixtureRepo();
     await expect(searchRepo(root, [root], "(", { regex: true })).rejects.toThrow();
+  });
+
+  it("rejects being pointed directly at an ignored directory", async () => {
+    const { root } = await buildFixtureRepo();
+    await expect(searchRepo(join(root, "node_modules"), [root], "module.exports", {})).rejects.toBeInstanceOf(
+      PathNotAllowedError,
+    );
+    await expect(searchRepo(join(root, ".git"), [root], "credential", {})).rejects.toBeInstanceOf(
+      PathNotAllowedError,
+    );
+  });
+
+  it("wraps a nonexistent search path's raw ENOENT into a typed error", async () => {
+    const { root } = await buildFixtureRepo();
+    await expect(searchRepo(join(root, "no-such-dir"), [root], "anything", {})).rejects.toBeInstanceOf(
+      PathNotAllowedError,
+    );
+  });
+
+  it("rejects a nested-quantifier regex immediately instead of backtracking catastrophically", async () => {
+    const { root } = await buildFixtureRepo();
+    // A line that cannot match, which is what makes (a+)+$ pathological. Before the fix this
+    // exact shape blocked the single-threaded server for minutes on a tiny file.
+    await writeFile(join(root, "pathological.txt"), `${"a".repeat(33)}!\n`);
+    const started = Date.now();
+    await expect(searchRepo(root, [root], "(a+)+$", { regex: true, limit: 1 })).rejects.toBeInstanceOf(
+      SearchTimeoutError,
+    );
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
+  it("bounds a catastrophic pattern that the static pre-check does not catch", async () => {
+    const { root } = await buildFixtureRepo();
+    // (a|a)+$ has no nested quantifier inside the group, so it slips past hasObviousCatastrophicShape
+    // and must be stopped by the vm execution timeout instead.
+    await writeFile(join(root, "pathological2.txt"), `${"a".repeat(40)}!\n`);
+    const started = Date.now();
+    await expect(searchRepo(root, [root], "(a|a)+$", { regex: true, limit: 1 })).rejects.toBeInstanceOf(
+      SearchTimeoutError,
+    );
+    expect(Date.now() - started).toBeLessThan(5000);
+  });
+
+  it("skips an oversized file but still finds matches in normal files", async () => {
+    const { root } = await buildFixtureRepo();
+    await writeFile(join(root, "huge.log"), `${"x".repeat(5 * 1024 * 1024 + 1)}\nneedle in the haystack\n`);
+    await writeFile(join(root, "small.txt"), "needle in the haystack\n");
+    const result = await searchRepo(root, [root], "needle", {});
+    expect(result.matches).toHaveLength(1);
+    expect(result.matches[0]?.file).toBe("small.txt");
   });
 
   it("redacts secrets even when line is longer than MAX_MATCH_TEXT_LENGTH", async () => {

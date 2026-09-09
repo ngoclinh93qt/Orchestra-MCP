@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { listClaudeSessions, readClaudeSession } from "./claude-sessions.js";
-import { listCodexSessions, readCodexSession } from "./codex-sessions.js";
+import { getClaudeSessionCwd, listClaudeSessions, readClaudeSession } from "./claude-sessions.js";
+import { getCodexSessionCwd, listCodexSessions, readCodexSession } from "./codex-sessions.js";
 import { isWithinAllowedRoots } from "../repo/path-safety.js";
 import type { SessionPage, SessionProvider, SessionSummary } from "./types.js";
 
@@ -53,12 +53,13 @@ export class SessionStore {
   }
 
   async read(provider: SessionProvider, sessionId: string, options: SessionReadOptions): Promise<SessionPage> {
-    const [claudeSessions, codexSessions] = await Promise.all([
-      provider === "claude" ? listClaudeSessions(this.claudeProjectsDir) : Promise.resolve([]),
-      provider === "codex" ? listCodexSessions(this.codexSessionsDir) : Promise.resolve([]),
-    ]);
-    const summary = [...claudeSessions, ...codexSessions].find((s) => s.sessionId === sessionId);
-    if (!summary || !(await isWithinAllowedRoots(summary.cwd, this.allowedRoots))) {
+    // Resolve only this session's cwd for the allowlist check. Parsing the whole corpus here (as
+    // this used to) cost ~1s and hundreds of MB on every session_read call.
+    const cwd =
+      provider === "claude"
+        ? await getClaudeSessionCwd(this.claudeProjectsDir, sessionId)
+        : await getCodexSessionCwd(this.codexSessionsDir, sessionId);
+    if (cwd === null || !(await isWithinAllowedRoots(cwd, this.allowedRoots))) {
       return { events: [], nextCursor: options.cursor ?? 0 };
     }
 

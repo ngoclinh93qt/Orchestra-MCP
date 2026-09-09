@@ -61,4 +61,27 @@ describe("SessionStore.read", () => {
     const outOfScope = await store.read("claude", "out-of-scope", {});
     expect(outOfScope.events).toHaveLength(0);
   });
+
+  it("reads a codex session inside an allowed root", async () => {
+    const { allowedRoot, claudeBaseDir, codexBaseDir } = await buildFixtures();
+    const store = new SessionStore({ allowedRoots: [allowedRoot], claudeProjectsDir: claudeBaseDir, codexSessionsDir: codexBaseDir });
+    const page = await store.read("codex", "rollout-2026-09-03T00-00-00-codex-1", {});
+    expect(page.events).toHaveLength(1);
+    expect(page.events[0]?.type).toBe("turn_context");
+  });
+
+  it("returns an empty page for a session that does not exist", async () => {
+    const { allowedRoot, claudeBaseDir, codexBaseDir } = await buildFixtures();
+    const store = new SessionStore({ allowedRoots: [allowedRoot], claudeProjectsDir: claudeBaseDir, codexSessionsDir: codexBaseDir });
+    await expect(store.read("claude", "no-such-session", {})).resolves.toEqual({ events: [], nextCursor: 0 });
+    await expect(store.read("codex", "no-such-rollout", {})).resolves.toEqual({ events: [], nextCursor: 0 });
+  });
+
+  it("does not consult the other provider's corpus when reading", async () => {
+    // Regression guard for the single-session cwd lookup: asking codex for a claude sessionId
+    // must not accidentally resolve via the claude corpus.
+    const { allowedRoot, claudeBaseDir, codexBaseDir } = await buildFixtures();
+    const store = new SessionStore({ allowedRoots: [allowedRoot], claudeProjectsDir: claudeBaseDir, codexSessionsDir: codexBaseDir });
+    await expect(store.read("codex", "in-scope", {})).resolves.toEqual({ events: [], nextCursor: 0 });
+  });
 });

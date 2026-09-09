@@ -25,8 +25,10 @@ function sessionIdFor(filePath: string): string {
   return base.slice(0, -".jsonl".length);
 }
 
+const CWD_SCAN_LIMIT = 20;
+
 function findCwd(lines: readonly string[]): string | null {
-  for (const line of lines) {
+  for (const line of lines.slice(0, CWD_SCAN_LIMIT)) {
     if (line.length === 0) continue;
     try {
       const parsed = JSON.parse(line) as { type?: string; payload?: { cwd?: unknown } };
@@ -53,6 +55,19 @@ function lastEventHint(lines: readonly string[]): string | null {
     }
   }
   return null;
+}
+
+/**
+ * Resolves just one rollout's cwd, for the allowlist check on the read path. Reads a single file
+ * instead of parsing every rollout the way `listCodexSessions` does. Matching on `sessionIdFor`
+ * (a basename comparison) keeps the same traversal safety the read path already relies on.
+ */
+export async function getCodexSessionCwd(baseDir: string, sessionId: string): Promise<string | null> {
+  const files = await findRolloutFiles(baseDir);
+  const filePath = files.find((f) => sessionIdFor(f) === sessionId) ?? null;
+  if (filePath === null) return null;
+  const content = await readFile(filePath, "utf8");
+  return findCwd(content.split("\n"));
 }
 
 export async function listCodexSessions(baseDir: string): Promise<SessionSummary[]> {

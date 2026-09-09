@@ -47,6 +47,17 @@ async function findSessionFile(baseDir: string, sessionId: string): Promise<stri
   return null;
 }
 
+/**
+ * Resolves just one session's cwd, for the allowlist check on the read path. Reads a single file
+ * instead of parsing the whole session corpus the way `listClaudeSessions` does.
+ */
+export async function getClaudeSessionCwd(baseDir: string, sessionId: string): Promise<string | null> {
+  const filePath = await findSessionFile(baseDir, sessionId);
+  if (filePath === null) return null;
+  const content = await readFile(filePath, "utf8");
+  return findCwd(content.split("\n"));
+}
+
 export async function listClaudeSessions(baseDir: string): Promise<SessionSummary[]> {
   const projectDirs = await readdir(baseDir, { withFileTypes: true }).catch(() => []);
   const summaries: SessionSummary[] = [];

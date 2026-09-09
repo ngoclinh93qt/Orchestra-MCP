@@ -2,7 +2,11 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { listCodexSessions, readCodexSession } from "../../src/sessions/codex-sessions.js";
+import {
+  getCodexSessionCwd,
+  listCodexSessions,
+  readCodexSession,
+} from "../../src/sessions/codex-sessions.js";
 
 async function buildFixtureSessionsDir(): Promise<string> {
   const baseDir = await mkdtemp(join(tmpdir(), "codex-sessions-"));
@@ -40,6 +44,58 @@ describe("listCodexSessions", () => {
     const baseDir = await buildFixtureSessionsDir();
     const sessions = await listCodexSessions(baseDir);
     expect(sessions.some((s) => s.sessionId === "rollout-2026-09-03T00-01-00-rollout-2")).toBe(false);
+  });
+});
+
+describe("getCodexSessionCwd", () => {
+  it("returns the cwd for an existing rollout", async () => {
+    const baseDir = await buildFixtureSessionsDir();
+    await expect(getCodexSessionCwd(baseDir, "rollout-2026-09-03T00-00-00-rollout-1")).resolves.toBe(
+      "/Users/thief/nik/demo",
+    );
+  });
+
+  it("returns null for a rollout that does not exist", async () => {
+    const baseDir = await buildFixtureSessionsDir();
+    await expect(getCodexSessionCwd(baseDir, "no-such-rollout")).resolves.toBeNull();
+  });
+
+  it("returns null when the rollout has no turn_context cwd", async () => {
+    const baseDir = await buildFixtureSessionsDir();
+    await expect(getCodexSessionCwd(baseDir, "rollout-2026-09-03T00-01-00-rollout-2")).resolves.toBeNull();
+  });
+
+  it("does not resolve a traversal-shaped sessionId", async () => {
+    const baseDir = await buildFixtureSessionsDir();
+    await expect(getCodexSessionCwd(baseDir, "../outside/rollout-2026-09-03T00-01-00-decoy")).resolves.toBeNull();
+  });
+
+  it("finds turn_context that is not the first line, within the scan limit", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "codex-sessions-late-cwd-"));
+    const dateDir = join(baseDir, "2026", "09", "03");
+    await mkdir(dateDir, { recursive: true });
+    // Real rollouts put turn_context around line 8; the bounded scan must still reach it.
+    const lines = [
+      ...Array.from({ length: 7 }, (_, i) => JSON.stringify({ type: "event_msg", payload: { type: `pre-${i}` } })),
+      JSON.stringify({ type: "turn_context", payload: { cwd: "/Users/thief/nik/late" } }),
+    ];
+    await writeFile(join(dateDir, "rollout-2026-09-03T00-00-00-late.jsonl"), `${lines.join("\n")}\n`);
+    await expect(getCodexSessionCwd(baseDir, "rollout-2026-09-03T00-00-00-late")).resolves.toBe(
+      "/Users/thief/nik/late",
+    );
+  });
+
+  it("does not scan unboundedly far into a rollout for cwd", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "codex-sessions-far-cwd-"));
+    const dateDir = join(baseDir, "2026", "09", "03");
+    await mkdir(dateDir, { recursive: true });
+    // turn_context past the 20-line scan limit is deliberately not found, matching Claude's bound.
+    const lines = [
+      ...Array.from({ length: 50 }, (_, i) => JSON.stringify({ type: "event_msg", payload: { type: `pre-${i}` } })),
+      JSON.stringify({ type: "turn_context", payload: { cwd: "/Users/thief/nik/far" } }),
+    ];
+    await writeFile(join(dateDir, "rollout-2026-09-03T00-00-00-far.jsonl"), `${lines.join("\n")}\n`);
+    await expect(getCodexSessionCwd(baseDir, "rollout-2026-09-03T00-00-00-far")).resolves.toBeNull();
   });
 });
 

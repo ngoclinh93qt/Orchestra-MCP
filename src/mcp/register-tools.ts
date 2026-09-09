@@ -5,9 +5,11 @@ import type { BridgeTask, Provider, TaskState } from "../domain/task.js";
 import {
   BinaryFileError,
   ConcurrencyLimitError,
+  FileTooLargeError,
   PathNotAllowedError,
   PromptTooLargeError,
   ProviderUnavailableError,
+  SearchTimeoutError,
   TaskNotFoundError,
   TaskNotResumableError,
 } from "../errors.js";
@@ -30,9 +32,11 @@ export interface RegisterToolsDeps {
 const EXPECTED_ERROR_TYPES = [
   BinaryFileError,
   ConcurrencyLimitError,
+  FileTooLargeError,
   PathNotAllowedError,
   PromptTooLargeError,
   ProviderUnavailableError,
+  SearchTimeoutError,
   TaskNotFoundError,
   TaskNotResumableError,
 ];

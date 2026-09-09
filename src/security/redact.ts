@@ -14,10 +14,32 @@ export function redactJsonValue(value: unknown): unknown {
   return value;
 }
 
-const SECRET_LINE_PATTERN =
-  /\b([\w.-]*(?:token|secret|password|api[_-]?key|authorization|cookie)[\w.-]*)(\s*[:=]{1}(?!=)\s*)(["'])((?:(?!\3).)+)\3/gi;
+const SECRET_KEY_FRAGMENT = "[\\w.-]*(?:token|secret|password|api[_-]?key|authorization|cookie)[\\w.-]*";
 
-/** Best-effort redaction of an assignment-shaped secret in one line of arbitrary text. */
+const SECRET_LINE_PATTERN = new RegExp(`\\b(${SECRET_KEY_FRAGMENT})(\\s*[:=]{1}(?!=)\\s*)(["'])((?:(?!\\3).)+)\\3`, "gi");
+
+/**
+ * Unquoted assignment shapes — env files outside `.env*`, YAML, `.npmrc`-style config. Deliberately
+ * narrower than the quoted pattern: the value must be at least 8 characters of non-space,
+ * non-quote, non-semicolon text, which is what keeps ordinary source code (`= true;`, `=== other`)
+ * from being corrupted. The `(?!=)` lookahead in the separator is what stops `===` matching.
+ */
+const UNQUOTED_SECRET_PATTERN = new RegExp(`\\b(${SECRET_KEY_FRAGMENT})(\\s*[:=]{1}(?!=)\\s*)([^\\s'";]{8,})`, "gi");
+
+const SAFE_UNQUOTED_LITERALS = new Set(["true", "false", "null", "undefined"]);
+
+/**
+ * Best-effort redaction of an assignment-shaped secret in one line of arbitrary text.
+ *
+ * Heuristic, not a guarantee: it recognizes common `key = value` shapes with a secret-looking key,
+ * both quoted and unquoted. Secrets that are not assignment-shaped (a bare token on its own line,
+ * a base64 blob) are not detected.
+ */
 export function redactTextLine(line: string): string {
-  return line.replace(SECRET_LINE_PATTERN, (_match, key, sep, quote) => `${key}${sep}${quote}${REDACTED}${quote}`);
+  let result = line.replace(SECRET_LINE_PATTERN, (_match, key, sep, quote) => `${key}${sep}${quote}${REDACTED}${quote}`);
+  result = result.replace(UNQUOTED_SECRET_PATTERN, (match, key, sep, value: string) => {
+    if (SAFE_UNQUOTED_LITERALS.has(value.toLowerCase()) || /^\d+$/.test(value)) return match;
+    return `${key}${sep}${REDACTED}`;
+  });
+  return result;
 }

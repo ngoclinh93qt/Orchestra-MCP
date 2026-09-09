@@ -53,3 +53,17 @@ export class BinaryFileError extends Error {
     this.name = "BinaryFileError";
   }
 }
+
+export class SearchTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SearchTimeoutError";
+  }
+}
+
+export class FileTooLargeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FileTooLargeError";
+  }
+}
