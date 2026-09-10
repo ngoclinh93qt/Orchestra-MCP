@@ -6,7 +6,7 @@ import { mountAuth } from "./auth/routes.js";
 import { loadConfig } from "./config.js";
 import { createApp, type CreateAppAuthOptions } from "./http/app.js";
 import { configFilePath, ensureConfigFile, watchConfigFile } from "./policy/config-file.js";
-import { AccessPolicy } from "./policy/files-policy.js";
+import { AccessPolicy, policiesEqual } from "./policy/files-policy.js";
 import { ClaudeAdapter } from "./providers/claude.js";
 import { CodexAdapter } from "./providers/codex.js";
 import { SessionStore } from "./sessions/session-store.js";
@@ -29,6 +29,9 @@ async function main(): Promise<void> {
 
   const stopWatchingPolicy = watchConfigFile(policyPath, {
     onReload: (next) => {
+      // Creating the file at startup produces a watch event of its own, and some editors save a
+      // file more than once. Only an actual change is worth applying or logging.
+      if (policiesEqual(policy.files, next.files)) return;
       policy.update(next.files);
       // eslint-disable-next-line no-console
       console.log(

@@ -102,6 +102,13 @@ export async function isDeniedPath(canonical: string, deny: readonly string[]): 
   return isDeniedByPrefixes(canonical, await expandDenyPrefixes(deny));
 }
 
+/** True if two policies grant exactly the same access. */
+export function policiesEqual(a: FilesPolicy, b: FilesPolicy): boolean {
+  const sameList = (left: readonly string[], right: readonly string[]): boolean =>
+    left.length === right.length && left.every((value, index) => value === right[index]);
+  return sameList(a.allow, b.allow) && sameList(a.deny, b.deny);
+}
+
 /**
  * Holds the policy currently in force behind a stable object identity, so the wiring built once at
  * startup keeps working while the underlying policy is replaced on config reload. Everything that

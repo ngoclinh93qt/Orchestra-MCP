@@ -8,6 +8,7 @@ import {
   EMPTY_FILES_POLICY,
   isDeniedPath,
   parseFilesPolicy,
+  policiesEqual,
   PolicyValidationError,
 } from "../../src/policy/files-policy.js";
 
@@ -109,5 +110,23 @@ describe("AccessPolicy", () => {
     policy.update({ allow: ["/b"], deny: ["/b/secrets"] });
     expect(captured.files.allow).toEqual(["/b"]);
     expect(captured.files.deny).toEqual(["/b/secrets"]);
+  });
+});
+
+describe("policiesEqual", () => {
+  it("treats identical policies as equal", () => {
+    expect(policiesEqual({ allow: ["/a"], deny: ["/a/x"] }, { allow: ["/a"], deny: ["/a/x"] })).toBe(true);
+  });
+
+  it("detects an added deny entry", () => {
+    expect(policiesEqual({ allow: ["/a"], deny: [] }, { allow: ["/a"], deny: ["/a/x"] })).toBe(false);
+  });
+
+  it("detects a changed allow entry", () => {
+    expect(policiesEqual({ allow: ["/a"], deny: [] }, { allow: ["/b"], deny: [] })).toBe(false);
+  });
+
+  it("detects a removed root", () => {
+    expect(policiesEqual({ allow: ["/a", "/b"], deny: [] }, { allow: ["/a"], deny: [] })).toBe(false);
   });
 });
