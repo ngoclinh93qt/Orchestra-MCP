@@ -36,6 +36,46 @@ installs them into `~/Library/LaunchAgents`, and starts both immediately via
 `launchctl bootstrap`. It is idempotent — running it again cleanly restarts
 both services rather than erroring on an already-loaded label.
 
+## Access policy: which folders the bridge can reach
+
+File access is controlled by one file, edited by you and never by a connected
+client:
+
+```
+~/Library/Application Support/Agent Bridge MCP/config.json
+```
+
+```jsonc
+{
+  "files": {
+    "allow": ["/Users/you/projects"],
+    "deny": ["/Users/you/projects/client-nda"]
+  }
+}
+```
+
+- `allow` — absolute paths the bridge may reach. Everything outside them is
+  invisible; an empty list means nothing is reachable.
+- `deny` — absolute paths carved back out of `allow`. **Deny wins.** A denied
+  directory is refused directly, hidden from listings of its allowed parent,
+  skipped by search, and rejected as an `agent_start` working directory — so an
+  agent cannot be pointed at it to read it on a caller's behalf. A deny entry
+  may name a path that does not exist yet; the rule applies the moment it does.
+
+Both lists apply to `repo_list`, `repo_read`, `repo_search`, `session_*`, and
+`agent_start` alike. The fixed ignore list (`.git`, `.env*`, `node_modules`,
+build output) still applies on top and cannot be switched off.
+
+**Saving the file applies it immediately — no restart.** The bridge logs each
+reload. A file that fails to parse or validate is rejected and the previous
+policy stays in force, so a typo can never widen access or take the bridge
+down; the error is logged (see Logs below).
+
+The file is created on first start. If the legacy
+`AGENT_BRIDGE_ALLOWED_ROOTS` environment variable is set, it seeds the initial
+`allow` list so an existing deployment keeps the access it had. After that the
+file is the only source of truth and the variable is ignored.
+
 ## Health checks
 
 ```bash

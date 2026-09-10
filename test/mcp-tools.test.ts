@@ -10,6 +10,7 @@ import { SessionStore } from "../src/sessions/session-store.js";
 import { EventLog } from "../src/store/event-log.js";
 import { TaskStore } from "../src/store/task-store.js";
 import { JobSupervisor } from "../src/supervisor/job-supervisor.js";
+import { accessPolicyFor } from "./helpers/policy.js";
 
 const fixture = fileURLToPath(new URL("./fixtures/fake-agent.mjs", import.meta.url));
 
@@ -62,7 +63,7 @@ async function buildHarness(mode: string): Promise<Harness> {
     taskStore,
     eventLog,
     adapters: { codex: fakeAdapter(mode) },
-    allowedRoots: [base],
+    policy: accessPolicyFor(base),
     maxConcurrentTotal: 2,
     maxConcurrentPerProvider: 1,
     maxPromptBytes: 1_000_000,
@@ -72,9 +73,9 @@ async function buildHarness(mode: string): Promise<Harness> {
     supervisor,
     taskStore,
     eventLog,
-    allowedRoots: [base],
+    policy: accessPolicyFor(base),
     sessionStore: new SessionStore({
-      allowedRoots: [base],
+      policy: accessPolicyFor(base),
       claudeProjectsDir: join(base, "claude-projects"),
       codexSessionsDir: join(base, "codex-sessions"),
     }),

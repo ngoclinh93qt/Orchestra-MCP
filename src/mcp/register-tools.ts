@@ -12,6 +12,7 @@ import {
   TaskNotFoundError,
   TaskNotResumableError,
 } from "../errors.js";
+import type { AccessPolicy } from "../policy/files-policy.js";
 import { listDirectory, readFileLines, searchRepo } from "../repo/repo-reader.js";
 import type { SessionStore } from "../sessions/session-store.js";
 import type { EventLog } from "../store/event-log.js";
@@ -23,7 +24,7 @@ export interface RegisterToolsDeps {
   readonly supervisor: JobSupervisor;
   readonly taskStore: TaskStore;
   readonly eventLog: EventLog;
-  readonly allowedRoots: readonly string[];
+  readonly policy: AccessPolicy;
   readonly sessionStore: SessionStore;
 }
 
@@ -227,7 +228,7 @@ export function createToolHandlers(deps: RegisterToolsDeps) {
     async repo_list(args: RepoListArgs, extra?: ToolExtra): Promise<CallToolResult> {
       if (!hasScope(extra, "agent:read")) return insufficientScope("agent:read");
       try {
-        const result = await listDirectory(args.path, deps.allowedRoots, {
+        const result = await listDirectory(args.path, deps.policy.files, {
           ...(args.depth !== undefined ? { depth: args.depth } : {}),
           ...(args.cursor !== undefined ? { cursor: args.cursor } : {}),
           ...(args.limit !== undefined ? { limit: args.limit } : {}),
@@ -242,7 +243,7 @@ export function createToolHandlers(deps: RegisterToolsDeps) {
     async repo_read(args: RepoReadArgs, extra?: ToolExtra): Promise<CallToolResult> {
       if (!hasScope(extra, "agent:read")) return insufficientScope("agent:read");
       try {
-        const result = await readFileLines(args.path, deps.allowedRoots, {
+        const result = await readFileLines(args.path, deps.policy.files, {
           ...(args.cursor !== undefined ? { cursor: args.cursor } : {}),
           ...(args.limit !== undefined ? { limit: args.limit } : {}),
         });
@@ -256,7 +257,7 @@ export function createToolHandlers(deps: RegisterToolsDeps) {
     async repo_search(args: RepoSearchArgs, extra?: ToolExtra): Promise<CallToolResult> {
       if (!hasScope(extra, "agent:read")) return insufficientScope("agent:read");
       try {
-        const result = await searchRepo(args.path, deps.allowedRoots, args.query, {
+        const result = await searchRepo(args.path, deps.policy.files, args.query, {
           ...(args.limit !== undefined ? { limit: args.limit } : {}),
         });
         return jsonResult(result);

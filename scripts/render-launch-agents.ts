@@ -86,7 +86,7 @@ function main(): void {
     targetDir,
     nodeBin,
     projectDir,
-    allowedRoots: config.allowedRoots.join(":"),
+    allowedRoots: config.seedAllowedRoots.join(":"),
     stateDir: config.stateDir,
     publicUrl: config.publicUrl.toString(),
     cloudflaredBin,

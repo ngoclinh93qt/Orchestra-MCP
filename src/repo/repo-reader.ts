@@ -2,6 +2,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { BinaryFileError, FileTooLargeError, PathNotAllowedError } from "../errors.js";
 import { isIgnoredName } from "./ignore-list.js";
+import { expandDenyPrefixes, isDeniedByPrefixes, type FilesPolicy } from "../policy/files-policy.js";
 import { resolveAllowedDirectoryStrict, resolveAllowedFile } from "./path-safety.js";
 import { redactTextLine } from "../security/redact.js";
 
@@ -24,15 +25,32 @@ export interface ListDirectoryOptions {
   readonly limit?: number;
 }
 
-async function walk(root: string, current: string, depth: number, out: DirectoryEntry[]): Promise<void> {
+/**
+ * Collects entries beneath `current`, skipping ignored names and anything under a denied prefix.
+ *
+ * The deny check has to happen here, not only when resolving the requested path: an allowed parent
+ * would otherwise expose a denied child to whoever lists or searches the parent, which is exactly
+ * what the deny list exists to prevent. A denied directory is neither reported nor descended into.
+ *
+ * Symlinks are never followed — `Dirent.isDirectory()` is false for them — so the paths built here
+ * stay canonical relative to an already-canonical `root`, and lexical deny comparison is sound.
+ */
+async function walk(
+  root: string,
+  current: string,
+  depth: number,
+  out: DirectoryEntry[],
+  denyPrefixes: readonly string[],
+): Promise<void> {
   const dirents = await readdir(current, { withFileTypes: true });
   for (const dirent of dirents) {
     if (isIgnoredName(dirent.name)) continue;
     const fullPath = join(current, dirent.name);
+    if (isDeniedByPrefixes(fullPath, denyPrefixes)) continue;
     const relPath = relative(root, fullPath);
     if (dirent.isDirectory()) {
       out.push({ path: relPath, type: "directory" });
-      if (depth > 1) await walk(root, fullPath, depth - 1, out);
+      if (depth > 1) await walk(root, fullPath, depth - 1, out, denyPrefixes);
     } else if (dirent.isFile()) {
       out.push({ path: relPath, type: "file" });
     }
@@ -41,12 +59,13 @@ async function walk(root: string, current: string, depth: number, out: Directory
 
 export async function listDirectory(
   path: string,
-  allowedRoots: readonly string[],
+  policy: FilesPolicy,
   options: ListDirectoryOptions,
 ): Promise<ListDirectoryResult> {
-  const canonical = await resolveAllowedDirectoryStrict(path, allowedRoots);
+  const canonical = await resolveAllowedDirectoryStrict(path, policy);
+  const denyPrefixes = await expandDenyPrefixes(policy.deny);
   const all: DirectoryEntry[] = [];
-  await walk(canonical, canonical, options.depth ?? 1, all);
+  await walk(canonical, canonical, options.depth ?? 1, all, denyPrefixes);
   all.sort((a, b) => a.path.localeCompare(b.path));
 
   const cursor = options.cursor ?? 0;
@@ -72,12 +91,12 @@ function looksBinary(buffer: Buffer): boolean {
 
 export async function readFileLines(
   path: string,
-  allowedRoots: readonly string[],
+  policy: FilesPolicy,
   options: ReadFileOptions,
 ): Promise<ReadFileResult> {
   let canonical: string;
   try {
-    canonical = await resolveAllowedFile(path, allowedRoots);
+    canonical = await resolveAllowedFile(path, policy);
   } catch (err: unknown) {
     // resolveAllowedFile throws PathNotAllowedError for most cases, but may let
     // untyped ENOENT escape from realpath/stat. Wrap any non-PathNotAllowedError.
@@ -128,15 +147,16 @@ const MAX_MATCH_TEXT_LENGTH = 300;
 
 export async function searchRepo(
   path: string,
-  allowedRoots: readonly string[],
+  policy: FilesPolicy,
   query: string,
   options: SearchOptions,
 ): Promise<SearchResult> {
-  const canonical = await resolveAllowedDirectoryStrict(path, allowedRoots);
+  const canonical = await resolveAllowedDirectoryStrict(path, policy);
+  const denyPrefixes = await expandDenyPrefixes(policy.deny);
   const limit = options.limit ?? 50;
 
   const files: DirectoryEntry[] = [];
-  await walk(canonical, canonical, Number.POSITIVE_INFINITY, files);
+  await walk(canonical, canonical, Number.POSITIVE_INFINITY, files, denyPrefixes);
 
   const matches: SearchMatch[] = [];
   let truncated = false;

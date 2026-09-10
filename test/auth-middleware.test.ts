@@ -15,6 +15,7 @@ import { JobSupervisor } from "../src/supervisor/job-supervisor.js";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { accessPolicyFor } from "./helpers/policy.js";
 
 const RECOVERY_CODE = "ABCDE-FGHJK-LMNPQ-RSTUV";
 const LOCAL_BEARER_TOKEN = "local-secret-token-value-0123456789";
@@ -82,7 +83,7 @@ describe("per-tool scope enforcement", () => {
       taskStore,
       eventLog,
       adapters: {},
-      allowedRoots: [base],
+      policy: accessPolicyFor(base),
       maxConcurrentTotal: 1,
       maxConcurrentPerProvider: 1,
       maxPromptBytes: 1000,
@@ -91,9 +92,9 @@ describe("per-tool scope enforcement", () => {
       supervisor,
       taskStore,
       eventLog,
-      allowedRoots: [base],
+      policy: accessPolicyFor(base),
       sessionStore: new SessionStore({
-        allowedRoots: [base],
+        policy: accessPolicyFor(base),
         claudeProjectsDir: join(base, "claude-projects"),
         codexSessionsDir: join(base, "codex-sessions"),
       }),
@@ -141,7 +142,7 @@ describe("loopback /mcp requires a token once auth is configured", () => {
       taskStore,
       eventLog,
       adapters: {},
-      allowedRoots: [base],
+      policy: accessPolicyFor(base),
       maxConcurrentTotal: 1,
       maxConcurrentPerProvider: 1,
       maxPromptBytes: 1000,
@@ -151,9 +152,9 @@ describe("loopback /mcp requires a token once auth is configured", () => {
         supervisor,
         taskStore,
         eventLog,
-        allowedRoots: [base],
+        policy: accessPolicyFor(base),
         sessionStore: new SessionStore({
-          allowedRoots: [base],
+          policy: accessPolicyFor(base),
           claudeProjectsDir: join(base, "claude-projects"),
           codexSessionsDir: join(base, "codex-sessions"),
         }),
@@ -239,7 +240,7 @@ describe("mountExtraRoutes ordering", () => {
       taskStore,
       eventLog,
       adapters: {},
-      allowedRoots: [base],
+      policy: accessPolicyFor(base),
       maxConcurrentTotal: 1,
       maxConcurrentPerProvider: 1,
       maxPromptBytes: 1000,
@@ -253,9 +254,9 @@ describe("mountExtraRoutes ordering", () => {
         supervisor,
         taskStore,
         eventLog,
-        allowedRoots: [base],
+        policy: accessPolicyFor(base),
         sessionStore: new SessionStore({
-          allowedRoots: [base],
+          policy: accessPolicyFor(base),
           claudeProjectsDir: join(base, "claude-projects"),
           codexSessionsDir: join(base, "codex-sessions"),
         }),

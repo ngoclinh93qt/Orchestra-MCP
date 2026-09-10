@@ -6,6 +6,7 @@ import {
   TaskNotFoundError,
   TaskNotResumableError,
 } from "../errors.js";
+import type { AccessPolicy } from "../policy/files-policy.js";
 import type { ProviderAdapter, ProviderInvocation } from "../providers/provider.js";
 import type { EventLog } from "../store/event-log.js";
 import type { TaskStore } from "../store/task-store.js";
@@ -15,7 +16,7 @@ export interface JobSupervisorOptions {
   readonly taskStore: TaskStore;
   readonly eventLog: EventLog;
   readonly adapters: Readonly<Partial<Record<Provider, ProviderAdapter>>>;
-  readonly allowedRoots: readonly string[];
+  readonly policy: AccessPolicy;
   readonly maxConcurrentTotal: number;
   readonly maxConcurrentPerProvider: number;
   readonly maxPromptBytes: number;
@@ -92,7 +93,7 @@ export class JobSupervisor {
     const adapter = this.adapterFor(request.provider);
     await adapter.checkAvailable();
     const promptBytes = this.assertPromptSize(request.prompt);
-    const cwd = await resolveAllowedDirectory(request.cwd, this.options.allowedRoots);
+    const cwd = await resolveAllowedDirectory(request.cwd, this.options.policy.files);
     this.assertConcurrencyAvailable(request.provider);
 
     const task = this.options.taskStore.create({ provider: request.provider, cwd, promptBytes });

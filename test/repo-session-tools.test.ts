@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createToolHandlers } from "../src/mcp/register-tools.js";
 import { SessionStore } from "../src/sessions/session-store.js";
+import { accessPolicyFor } from "./helpers/policy.js";
 
 function textOf(result: { content: readonly { type: string; text?: string }[] }): string {
   const first = result.content[0];
@@ -25,7 +26,7 @@ async function buildHarness() {
 
   const codexSessionsDir = join(base, "codex-sessions");
   const sessionStore = new SessionStore({
-    allowedRoots: [root],
+    policy: accessPolicyFor(root),
     claudeProjectsDir: join(base, "claude-projects"),
     codexSessionsDir,
   });
@@ -34,7 +35,7 @@ async function buildHarness() {
     supervisor: undefined as never,
     taskStore: undefined as never,
     eventLog: undefined as never,
-    allowedRoots: [root],
+    policy: accessPolicyFor(root),
     sessionStore,
   });
 

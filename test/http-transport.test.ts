@@ -11,6 +11,7 @@ import { EventLog } from "../src/store/event-log.js";
 import { TaskStore } from "../src/store/task-store.js";
 import { JobSupervisor } from "../src/supervisor/job-supervisor.js";
 import type { Server } from "node:http";
+import { accessPolicyFor } from "./helpers/policy.js";
 
 interface Harness {
   readonly bridgeApp: BridgeApp;
@@ -29,7 +30,7 @@ async function buildHarness(maxRequestBytes?: number): Promise<Harness> {
     taskStore,
     eventLog,
     adapters: {},
-    allowedRoots: [base],
+    policy: accessPolicyFor(base),
     maxConcurrentTotal: 2,
     maxConcurrentPerProvider: 1,
     maxPromptBytes: 1_000_000,
@@ -39,9 +40,9 @@ async function buildHarness(maxRequestBytes?: number): Promise<Harness> {
       supervisor,
       taskStore,
       eventLog,
-      allowedRoots: [base],
+      policy: accessPolicyFor(base),
       sessionStore: new SessionStore({
-        allowedRoots: [base],
+        policy: accessPolicyFor(base),
         claudeProjectsDir: join(base, "claude-projects"),
         codexSessionsDir: join(base, "codex-sessions"),
       }),

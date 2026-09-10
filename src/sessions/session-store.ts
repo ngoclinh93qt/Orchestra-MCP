@@ -2,11 +2,12 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { getClaudeSessionCwd, listClaudeSessions, readClaudeSession } from "./claude-sessions.js";
 import { getCodexSessionCwd, listCodexSessions, readCodexSession } from "./codex-sessions.js";
-import { isWithinAllowedRoots } from "../repo/path-safety.js";
+import type { AccessPolicy } from "../policy/files-policy.js";
+import { isPathPermitted } from "../repo/path-safety.js";
 import type { SessionPage, SessionProvider, SessionSummary } from "./types.js";
 
 export interface SessionStoreOptions {
-  readonly allowedRoots: readonly string[];
+  readonly policy: AccessPolicy;
   readonly claudeProjectsDir?: string;
   readonly codexSessionsDir?: string;
 }
@@ -22,12 +23,12 @@ export interface SessionReadOptions {
 }
 
 export class SessionStore {
-  private readonly allowedRoots: readonly string[];
+  private readonly policy: AccessPolicy;
   private readonly claudeProjectsDir: string;
   private readonly codexSessionsDir: string;
 
   constructor(options: SessionStoreOptions) {
-    this.allowedRoots = options.allowedRoots;
+    this.policy = options.policy;
     this.claudeProjectsDir = options.claudeProjectsDir ?? join(homedir(), ".claude", "projects");
     this.codexSessionsDir = options.codexSessionsDir ?? join(homedir(), ".codex", "sessions");
   }
@@ -44,7 +45,7 @@ export class SessionStore {
     const all = [...claudeSessions, ...codexSessions];
     const inScope: SessionSummary[] = [];
     for (const session of all) {
-      if (await isWithinAllowedRoots(session.cwd, this.allowedRoots)) inScope.push(session);
+      if (await isPathPermitted(session.cwd, this.policy.files)) inScope.push(session);
     }
 
     inScope.sort((a, b) => b.lastModifiedAt.localeCompare(a.lastModifiedAt));
@@ -59,7 +60,7 @@ export class SessionStore {
       provider === "claude"
         ? await getClaudeSessionCwd(this.claudeProjectsDir, sessionId)
         : await getCodexSessionCwd(this.codexSessionsDir, sessionId);
-    if (cwd === null || !(await isWithinAllowedRoots(cwd, this.allowedRoots))) {
+    if (cwd === null || !(await isPathPermitted(cwd, this.policy.files))) {
       return { events: [], nextCursor: options.cursor ?? 0 };
     }
 

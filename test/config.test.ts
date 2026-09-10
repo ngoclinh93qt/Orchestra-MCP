@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadConfig, resolveAllowedDirectory } from "../src/config.js";
 import { PathNotAllowedError } from "../src/errors.js";
+import { filesPolicyFor } from "./helpers/policy.js";
 
 describe("loadConfig", () => {
   it("defaults to loopback and the approved public endpoint", () => {
@@ -27,7 +28,7 @@ describe("resolveAllowedDirectory", () => {
     const root = join(base, "root");
     const repo = join(root, "repo");
     await mkdir(repo, { recursive: true });
-    await expect(resolveAllowedDirectory(repo, [root])).resolves.toBe(await realpath(repo));
+    await expect(resolveAllowedDirectory(repo, filesPolicyFor(root))).resolves.toBe(await realpath(repo));
   });
 
   it("rejects a symlink escape", async () => {
@@ -36,6 +37,6 @@ describe("resolveAllowedDirectory", () => {
     const outside = join(base, "outside");
     const link = join(root, "escape");
     await mkdir(root); await mkdir(outside); await symlink(outside, link);
-    await expect(resolveAllowedDirectory(link, [root])).rejects.toBeInstanceOf(PathNotAllowedError);
+    await expect(resolveAllowedDirectory(link, filesPolicyFor(root))).rejects.toBeInstanceOf(PathNotAllowedError);
   });
 });

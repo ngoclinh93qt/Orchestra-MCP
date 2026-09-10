@@ -2,7 +2,16 @@
 
 **Date:** 2026-09-08
 
-**Status:** Approved in chat; awaiting written-spec review
+**Status:** Implemented. Partly superseded — see the note below.
+
+**Superseded in part (2026-09-10):** file access is no longer configured by the
+`AGENT_BRIDGE_ALLOWED_ROOTS` environment variable. It now lives in a hot-reloaded
+`config.json` with an `allow`/`deny` pair; see "Access policy" in
+`docs/OPERATIONS.md`. Section 3's argument for scoping sessions to allowlisted
+roots also no longer holds: most Codex *app* threads carry no working directory
+at all (131 of 155 on the owner's machine), so a cwd-derived scope cannot
+classify them. The session model is being redesigned separately; sections 3 and 5
+describe only what the CLI-session implementation does today.
 
 ## 1. Purpose
 

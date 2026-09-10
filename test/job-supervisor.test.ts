@@ -8,6 +8,7 @@ import type { ProviderAdapter, ProviderEvent } from "../src/providers/provider.j
 import { EventLog } from "../src/store/event-log.js";
 import { TaskStore } from "../src/store/task-store.js";
 import { JobSupervisor } from "../src/supervisor/job-supervisor.js";
+import { accessPolicyFor } from "./helpers/policy.js";
 
 const fixture = fileURLToPath(new URL("./fixtures/fake-agent.mjs", import.meta.url));
 
@@ -71,7 +72,7 @@ async function buildHarness(
     taskStore,
     eventLog,
     adapters: { codex: fakeAdapter(mode) },
-    allowedRoots: [base],
+    policy: accessPolicyFor(base),
     maxConcurrentTotal: overrides.maxConcurrentTotal ?? 2,
     maxConcurrentPerProvider: overrides.maxConcurrentPerProvider ?? 1,
     maxPromptBytes: overrides.maxPromptBytes ?? 1_000_000,
