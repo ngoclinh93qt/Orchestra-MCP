@@ -1,8 +1,11 @@
 import { readFileSync, existsSync } from "node:fs";
+import { copyFile, mkdir, mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { TOOL_DEFINITIONS } from "../src/mcp/tool-schemas.js";
+import { renderPluginMcpConfig } from "../scripts/render-launch-agents.js";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -33,7 +36,7 @@ interface McpServersFile {
 const TRACKED_PLUGIN_FILES = [
   ".agents/plugins/marketplace.json",
   "plugins/agent-bridge/.codex-plugin/plugin.json",
-  "plugins/agent-bridge/.mcp.json",
+  "plugins/agent-bridge/.mcp.json.template",
   "plugins/agent-bridge/skills/agent-bridge/SKILL.md",
   "config/codex.local.example.toml",
   "docs/CONNECT_CHATGPT.md",
@@ -66,17 +69,29 @@ describe("plugin package manifests", () => {
     expect(plugin.skills).toBe("./skills/");
 
     const pluginDir = join(repoRoot, "plugins", "agent-bridge");
-    expect(existsSync(join(pluginDir, plugin.mcpServers))).toBe(true);
+    // `.mcp.json` itself is rendered per deployment (it carries that machine's public URL) and
+    // is git-ignored, so what ships in the repository is its template.
+    expect(existsSync(join(pluginDir, `${plugin.mcpServers}.template`))).toBe(true);
     expect(existsSync(join(pluginDir, plugin.skills, "agent-bridge", "SKILL.md"))).toBe(true);
   });
 
-  it("declares the exact production MCP URL, not a placeholder", () => {
-    const mcp = readJson("plugins/agent-bridge/.mcp.json") as McpServersFile;
+  it("renders this deployment's own public URL into the plugin's MCP config", async () => {
+    const projectDir = await mkdtemp(join(tmpdir(), "bridge-plugin-render-"));
+    const pluginDir = join(projectDir, "plugins", "agent-bridge");
+    await mkdir(pluginDir, { recursive: true });
+    await copyFile(
+      join(repoRoot, "plugins", "agent-bridge", ".mcp.json.template"),
+      join(pluginDir, ".mcp.json.template"),
+    );
+
+    const rendered = renderPluginMcpConfig(projectDir, "https://mcp.example.com/mcp");
+
+    const mcp = JSON.parse(readFileSync(rendered, "utf8")) as McpServersFile;
     const server = mcp.mcpServers["agent-bridge"];
     expect(server).toBeDefined();
     expect(server!.type).toBe("http");
-    expect(server!.url).toBe("https://mcp.markapidown.net/mcp");
-    expect(server!.oauth_resource).toBe("https://mcp.markapidown.net/mcp");
+    expect(server!.url).toBe("https://mcp.example.com/mcp");
+    expect(server!.oauth_resource).toBe("https://mcp.example.com/mcp");
   });
 
   it("never declares an auto-approval override for any tool", () => {
@@ -85,7 +100,7 @@ describe("plugin package manifests", () => {
     // This looks for config-key-shaped strings, not prose (plugin.json's own description text
     // says it "never bypasses" sandboxing — a real match there would be a false positive).
     const pluginRaw = readFileSync(join(repoRoot, "plugins/agent-bridge/.codex-plugin/plugin.json"), "utf8");
-    const mcpRaw = readFileSync(join(repoRoot, "plugins/agent-bridge/.mcp.json"), "utf8");
+    const mcpRaw = readFileSync(join(repoRoot, "plugins/agent-bridge/.mcp.json.template"), "utf8");
     const overridePattern = /auto[_-]?approve|skip[_-]?approval|bypass[_-]?(approval|permission)/i;
     for (const raw of [pluginRaw, mcpRaw]) {
       expect(raw).not.toMatch(overridePattern);

@@ -4,7 +4,7 @@
   "description": "Start, watch, continue, and cancel local Codex CLI and Claude Code tasks through a private, self-hosted MCP bridge. Not for redistribution.",
   "author": {
     "name": "Private owner",
-    "url": "https://mcp.markapidown.net/"
+    "url": "https://mcp.example.com/"
   },
   "license": "UNLICENSED",
   "keywords": ["codex", "claude", "agents", "mcp", "automation", "private"],
@@ -17,7 +17,7 @@
     "developerName": "Private owner",
     "category": "Developer Tools",
     "capabilities": ["Interactive", "Read", "Write"],
-    "websiteURL": "https://mcp.markapidown.net/",
+    "websiteURL": "https://mcp.example.com/",
     "defaultPrompt": [
       "List my agent bridge tasks.",
       "Start a Codex task in <allowlisted repo path> to <task>.",

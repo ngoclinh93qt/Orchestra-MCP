@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>net.markapidown.agent-bridge</string>
+  <string>local.agent-bridge.bridge</string>
   <key>ProgramArguments</key>
   <array>
     <string>__NODE_BIN__</string>

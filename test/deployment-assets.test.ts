@@ -27,7 +27,7 @@ async function renderIntoTemp(): Promise<{ targetDir: string; stateDir: string; 
     projectDir: repoRoot,
     allowedRoots: "/Users/example/projects",
     stateDir,
-    publicUrl: "https://mcp.markapidown.net/mcp",
+    publicUrl: "https://mcp.example.com/mcp",
     cloudflaredBin: "/opt/homebrew/bin/cloudflared",
     cloudflaredConfig: join(base, "cloudflared-config.yml"),
   });
@@ -37,10 +37,10 @@ async function renderIntoTemp(): Promise<{ targetDir: string; stateDir: string; 
 describe("rendered LaunchAgent plists", () => {
   it("renders the bridge plist with loopback-safe, absolute, secret-free configuration", async () => {
     const { results, stateDir } = await renderIntoTemp();
-    const bridgePlist = results.find((r) => r.label === "net.markapidown.agent-bridge")!;
+    const bridgePlist = results.find((r) => r.label === "local.agent-bridge.bridge")!;
     const plist = await plutilToJson(bridgePlist.path);
 
-    expect(plist.Label).toBe("net.markapidown.agent-bridge");
+    expect(plist.Label).toBe("local.agent-bridge.bridge");
     expect(plist.RunAtLoad).toBe(true);
     const keepAlive = plist.KeepAlive as { SuccessfulExit: boolean; Crashed: boolean };
     expect(keepAlive.Crashed).toBe(true);
@@ -59,10 +59,10 @@ describe("rendered LaunchAgent plists", () => {
 
   it("renders the tunnel plist pointing at an absolute cloudflared binary and config", async () => {
     const { results } = await renderIntoTemp();
-    const tunnelPlist = results.find((r) => r.label === "net.markapidown.agent-tunnel")!;
+    const tunnelPlist = results.find((r) => r.label === "local.agent-bridge.tunnel")!;
     const plist = await plutilToJson(tunnelPlist.path);
 
-    expect(plist.Label).toBe("net.markapidown.agent-tunnel");
+    expect(plist.Label).toBe("local.agent-bridge.tunnel");
     expect(plist.RunAtLoad).toBe(true);
     const args = plist.ProgramArguments as string[];
     expect(args[0]).toBe("/opt/homebrew/bin/cloudflared");
@@ -79,7 +79,7 @@ describe("rendered LaunchAgent plists", () => {
       projectDir: repoRoot,
       allowedRoots: "/Users/example/projects",
       stateDir: join(base, "state"),
-      publicUrl: "https://mcp.markapidown.net/mcp",
+      publicUrl: "https://mcp.example.com/mcp",
       cloudflaredBin: "/opt/homebrew/bin/cloudflared",
       cloudflaredConfig: join(base, "cloudflared-config.yml"),
     };
@@ -96,7 +96,7 @@ describe("rendered LaunchAgent plists", () => {
 describe("cloudflared example config", () => {
   it("routes the public hostname to the loopback bridge and ends with a 404 catch-all", () => {
     const content = readFileSync(join(repoRoot, "config", "cloudflared.example.yml"), "utf8");
-    expect(content).toContain("hostname: mcp.markapidown.net");
+    expect(content).toContain("hostname: mcp.example.com");
     expect(content).toContain("service: http://127.0.0.1:8787");
 
     const ingressBlock = content.slice(content.indexOf("ingress:"));
@@ -167,14 +167,14 @@ exit 0
     await execFileAsync("bash", [join(repoRoot, "scripts", "install-services.sh")], { env });
     await execFileAsync("bash", [join(repoRoot, "scripts", "install-services.sh")], { env });
 
-    expect(existsSync(join(launchAgentsDir, "net.markapidown.agent-bridge.plist"))).toBe(true);
-    expect(existsSync(join(launchAgentsDir, "net.markapidown.agent-tunnel.plist"))).toBe(true);
+    expect(existsSync(join(launchAgentsDir, "local.agent-bridge.bridge.plist"))).toBe(true);
+    expect(existsSync(join(launchAgentsDir, "local.agent-bridge.tunnel.plist"))).toBe(true);
 
     const log = await readFile(logPath, "utf8");
     const bootstrapCalls = log.split("\n").filter((line) => line.includes("bootstrap"));
     expect(bootstrapCalls.length).toBe(4); // 2 labels x 2 install runs
-    expect(log).toContain("net.markapidown.agent-bridge");
-    expect(log).toContain("net.markapidown.agent-tunnel");
+    expect(log).toContain("local.agent-bridge.bridge");
+    expect(log).toContain("local.agent-bridge.tunnel");
   }, 30000);
 
   it("retries through a transient bootstrap EIO instead of leaving a service down", async () => {
@@ -229,8 +229,8 @@ exit 0
     await execFileAsync("bash", [join(repoRoot, "scripts", "install-services.sh")], { env });
     await execFileAsync("bash", [join(repoRoot, "scripts", "uninstall-services.sh")], { env });
 
-    expect(existsSync(join(launchAgentsDir, "net.markapidown.agent-bridge.plist"))).toBe(false);
-    expect(existsSync(join(launchAgentsDir, "net.markapidown.agent-tunnel.plist"))).toBe(false);
+    expect(existsSync(join(launchAgentsDir, "local.agent-bridge.bridge.plist"))).toBe(false);
+    expect(existsSync(join(launchAgentsDir, "local.agent-bridge.tunnel.plist"))).toBe(false);
 
     const log = await readFile(logPath, "utf8");
     expect(log).toContain("bootout");

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build and deploy a private MCP bridge at `mcp.markapidown.net` that safely starts, observes, continues, and cancels local Codex CLI and Claude Code tasks.
+**Goal:** Build and deploy a private MCP bridge at `mcp.example.com` that safely starts, observes, continues, and cancels local Codex CLI and Claude Code tasks.
 
 **Architecture:** A TypeScript/Node.js service binds only to `127.0.0.1:8787`, persists task metadata in SQLite and provider events in JSONL, and exposes six MCP tools over Streamable HTTP. A named Cloudflare Tunnel publishes the loopback service; MCP-compatible OAuth protects remote access, while provider adapters invoke installed CLIs without a shell or permission-bypass flags.
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Bind only to `127.0.0.1:8787`; public URL is `https://mcp.markapidown.net/mcp`.
+- Bind only to `127.0.0.1:8787`; public URL is `https://mcp.example.com/mcp`.
 - Do not call the OpenAI API or add an OpenAI API key.
 - Never use Codex or Claude permission/sandbox bypass flags.
 - Never expose raw shell, arbitrary executable, environment, model, sandbox-bypass, download, or delete-log tools.
@@ -319,7 +319,7 @@ Commit: `feat: package private agent bridge plugin`
 
 **Files:**
 - Create: `scripts/install-cloudflared.sh`, `scripts/render-launch-agents.ts`, `scripts/install-services.sh`, `scripts/uninstall-services.sh`
-- Create: `config/cloudflared.example.yml`, `config/net.markapidown.agent-bridge.plist.template`, `config/net.markapidown.agent-tunnel.plist.template`
+- Create: `config/cloudflared.example.yml`, `config/local.agent-bridge.bridge.plist.template`, `config/local.agent-bridge.tunnel.plist.template`
 - Create: `docs/OPERATIONS.md`
 - Test: `test/deployment-assets.test.ts`
 
@@ -336,7 +336,7 @@ Use strict shell mode, explicit paths, temp files + atomic rename, owner-only se
 
 - [x] **Step 3: Add named-tunnel flow**
 
-Install `cloudflared` with Homebrew only if absent; route `mcp.markapidown.net` to `http://127.0.0.1:8787`; require final 404; never use a Quick Tunnel for completion.
+Install `cloudflared` with Homebrew only if absent; route `mcp.example.com` to `http://127.0.0.1:8787`; require final 404; never use a Quick Tunnel for completion.
 
 - [x] **Step 4: Dry-run twice and test rollback**
 
@@ -379,7 +379,7 @@ Open `cloudflared tunnel login`; after browser authorization create the named tu
 
 - [ ] **Step 5: Verify public security and network binding**
 
-Run `scripts/verify-live.sh https://mcp.markapidown.net`; verify unauthenticated rejection and authenticated tool listing. Use `lsof` to confirm only `127.0.0.1:8787` listens.
+Run `scripts/verify-live.sh https://mcp.example.com`; verify unauthenticated rejection and authenticated tool listing. Use `lsof` to confirm only `127.0.0.1:8787` listens.
 
 - [ ] **Step 6: Connect ChatGPT Web and smoke-test both providers**
 
@@ -389,7 +389,7 @@ Install/connect the private plugin in the Business workspace, complete OAuth, an
 
 Confirm task history survives both LaunchAgent restarts. Record exact paths, labels, health commands, limits, and rollback without secrets.
 
-Run: `npm run verify && scripts/verify-live.sh https://mcp.markapidown.net`
+Run: `npm run verify && scripts/verify-live.sh https://mcp.example.com`
 
 Commit: `docs: finish agent bridge operations guide`
 

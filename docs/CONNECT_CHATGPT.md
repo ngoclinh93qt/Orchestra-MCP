@@ -2,9 +2,10 @@
 
 This bridge exposes one MCP server two ways: over loopback at
 `http://127.0.0.1:8787/mcp` for clients on this Mac, and over
-`https://mcp.markapidown.net/mcp` for ChatGPT Web via the Cloudflare Tunnel
-(see `docs/OPERATIONS.md`). Both paths use the same six tools and the same
-OAuth server; only how a client authenticates differs.
+`https://mcp.example.com/mcp` for ChatGPT Web via the Cloudflare Tunnel
+(see `docs/OPERATIONS.md`). Both paths use the same eleven tools and the same
+OAuth server; only how a client authenticates differs. Replace the example
+hostname below with your own, the one you set in `.env`.
 
 Run `npm run enroll-owner` once before connecting anything. It prints a
 recovery code (approves the OAuth flow below) and a local bearer token
@@ -30,7 +31,9 @@ Both paths are covered below.
 ## 1. Codex CLI on this Mac (local plugin)
 
 This repository is a personal Codex plugin marketplace of one plugin, at
-`.agents/plugins/marketplace.json`. From the repository root:
+`.agents/plugins/marketplace.json`. The plugin's `.mcp.json` is rendered from
+`.mcp.json.template` with your own public URL by
+`scripts/install-services.sh`, so run that first. From the repository root:
 
 ```bash
 codex plugin marketplace add .
@@ -39,7 +42,7 @@ codex plugin add agent-bridge@agent-bridge-marketplace
 
 This installs the `agent-bridge` skill (`skills/agent-bridge/SKILL.md`) and
 registers the remote MCP server declared in `.mcp.json`
-(`https://mcp.markapidown.net/mcp`) with Codex. The first tool call will walk
+(`https://mcp.example.com/mcp`) with Codex. The first tool call will walk
 you through the OAuth flow in a browser: Codex opens the authorization page,
 you enter the recovery code from enrollment, and Codex stores the resulting
 token itself.
@@ -68,7 +71,7 @@ claude mcp add --transport http agent-bridge-local http://127.0.0.1:8787/mcp \
 Prefer sourcing `AGENT_BRIDGE_LOCAL_TOKEN` from your keychain or password
 manager rather than a plaintext shell profile entry. To use the public
 tunnel with real OAuth instead of the local token, use `--transport http`
-with the `https://mcp.markapidown.net/mcp` URL and omit `--header`; Claude
+with the `https://mcp.example.com/mcp` URL and omit `--header`; Claude
 Code will run the OAuth flow itself and prompt for the recovery code on the
 same approval page.
 
@@ -82,7 +85,7 @@ there is nothing to install or upload from this repository:
    connector** (workspace admin settings; the exact label has moved before
    and may again — look for "custom connector," "developer mode," or
    "add MCP server").
-3. Enter the server URL: `https://mcp.markapidown.net/mcp`.
+3. Enter the server URL: `https://mcp.example.com/mcp`.
 4. ChatGPT performs OAuth discovery against that URL automatically (this
    bridge advertises `/.well-known/oauth-authorization-server` and supports
    dynamic client registration, so no client ID needs to be entered by

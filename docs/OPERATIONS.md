@@ -8,9 +8,15 @@ health-checking them, and rolling the whole thing back. It assumes
 ## Install
 
 ```bash
+cp .env.example .env             # your public URL and your folders; git-ignored
 npm run build
 scripts/install-cloudflared.sh   # no-op if cloudflared is already on PATH
 ```
+
+`.env` is the single place this deployment's own settings live.
+`scripts/install-services.sh` reads it when rendering the plists and the Codex
+plugin's `.mcp.json`, and refuses to run without `AGENT_BRIDGE_PUBLIC_URL`.
+Re-run that script after changing a value — the installed plist carries a copy.
 
 Before installing the tunnel LaunchAgent, complete the one-time Cloudflare
 login and named-tunnel creation (interactive; needs your Cloudflare account):
@@ -21,7 +27,7 @@ cloudflared tunnel create agent-bridge
 cp config/cloudflared.example.yml ~/.cloudflared/config.yml
 # Edit ~/.cloudflared/config.yml: fill in the real tunnel id and
 # credentials-file path that `tunnel create` printed.
-cloudflared tunnel route dns agent-bridge mcp.markapidown.net
+cloudflared tunnel route dns agent-bridge mcp.example.com
 ```
 
 Then install both LaunchAgents:
@@ -30,11 +36,13 @@ Then install both LaunchAgents:
 scripts/install-services.sh
 ```
 
-This renders `net.markapidown.agent-bridge.plist` and
-`net.markapidown.agent-tunnel.plist` from the templates in `config/`,
+This renders `local.agent-bridge.bridge.plist` and
+`local.agent-bridge.tunnel.plist` from the templates in `config/`,
 installs them into `~/Library/LaunchAgents`, and starts both immediately via
 `launchctl bootstrap`. It is idempotent — running it again cleanly restarts
-both services rather than erroring on an already-loaded label.
+both services rather than erroring on an already-loaded label. If some other
+process already holds the bridge's port, it stops and tells you rather than
+installing a service that would crash-loop against it.
 
 ## Access policy: which folders the bridge can reach
 
@@ -109,7 +117,7 @@ Two things the bridge cannot fix for you:
 curl -s http://127.0.0.1:8787/healthz
 
 # Public hostname, through the tunnel
-curl -s https://mcp.markapidown.net/healthz
+curl -s https://mcp.example.com/healthz
 
 # Confirm nothing but the loopback interface is actually listening
 lsof -iTCP -sTCP:LISTEN -P | grep 8787
@@ -134,8 +142,8 @@ separately from the two service logs above.
 ## Restart
 
 ```bash
-launchctl kickstart -k "gui/$(id -u)/net.markapidown.agent-bridge"
-launchctl kickstart -k "gui/$(id -u)/net.markapidown.agent-tunnel"
+launchctl kickstart -k "gui/$(id -u)/local.agent-bridge.bridge"
+launchctl kickstart -k "gui/$(id -u)/local.agent-bridge.tunnel"
 ```
 
 Both LaunchAgents restart automatically on crash (`KeepAlive.Crashed`), but
@@ -170,8 +178,8 @@ task history or the tunnel's identity.
 ```bash
 npm run verify
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8787/healthz
-curl -s -o /dev/null -w '%{http_code}\n' https://mcp.markapidown.net/healthz
-curl -s -o /dev/null -w '%{http_code}\n' -X POST https://mcp.markapidown.net/mcp \
+curl -s -o /dev/null -w '%{http_code}\n' https://mcp.example.com/healthz
+curl -s -o /dev/null -w '%{http_code}\n' -X POST https://mcp.example.com/mcp \
   -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 # ^ expect 401: unauthenticated tool calls must be rejected, even over the tunnel.

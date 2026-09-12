@@ -10,8 +10,8 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "start": "node dist/main.js",
-    "enroll-owner": "tsx src/cli/enroll-owner.ts",
+    "start": "node --env-file-if-exists=.env dist/main.js",
+    "enroll-owner": "node --env-file-if-exists=.env node_modules/.bin/tsx src/cli/enroll-owner.ts",
     "verify": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {

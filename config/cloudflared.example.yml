@@ -14,7 +14,7 @@ credentials-file: /Users/YOUR_USERNAME/.cloudflared/TUNNEL_ID.json
 
 ingress:
   # The only route: the public hostname forwards to the bridge's loopback port.
-  - hostname: mcp.markapidown.net
+  - hostname: mcp.example.com
     service: http://127.0.0.1:8787
   # Required catch-all: any other request gets a plain 404, never falls through
   # to an unauthenticated default.

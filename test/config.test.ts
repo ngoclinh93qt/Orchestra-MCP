@@ -7,11 +7,22 @@ import { PathNotAllowedError } from "../src/errors.js";
 import { filesPolicyFor } from "./helpers/policy.js";
 
 describe("loadConfig", () => {
-  it("defaults to loopback and the approved public endpoint", () => {
-    const config = loadConfig({ AGENT_BRIDGE_ALLOWED_ROOTS: "/Users/thief/nik" });
+  it("defaults to loopback and takes the public endpoint from the environment", () => {
+    const config = loadConfig({
+      AGENT_BRIDGE_ALLOWED_ROOTS: "/Users/thief/nik",
+      AGENT_BRIDGE_PUBLIC_URL: "https://mcp.example.com/mcp",
+    });
     expect(config.host).toBe("127.0.0.1");
     expect(config.port).toBe(8787);
-    expect(config.publicUrl.href).toBe("https://mcp.markapidown.net/mcp");
+    expect(config.publicUrl.href).toBe("https://mcp.example.com/mcp");
+  });
+
+  it("refuses to start without a public URL rather than assuming one", () => {
+    // The public URL is also the OAuth issuer and resource identifier, so a default would let a
+    // misconfigured deployment advertise an identity that is not its own.
+    expect(() => loadConfig({ AGENT_BRIDGE_ALLOWED_ROOTS: "/Users/thief/nik" })).toThrow(
+      "AGENT_BRIDGE_PUBLIC_URL",
+    );
   });
 
   it("rejects a non-loopback host", () => {

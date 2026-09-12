@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "agent-bridge": {
-      "type": "http",
-      "url": "https://mcp.markapidown.net/mcp",
-      "oauth_resource": "https://mcp.markapidown.net/mcp"
-    }
-  }
-}

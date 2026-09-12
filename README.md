@@ -84,9 +84,15 @@ caller cannot ask to skip it.
 
 ```bash
 npm install
+cp .env.example .env  # then edit: your public URL and your folders
 npm run verify        # typecheck, tests, build
 npm run enroll-owner  # prints a recovery code and a local bearer token, once
 ```
+
+`.env` holds this deployment's own settings — the public HTTPS endpoint your
+tunnel routes here, and the folders to seed the allowlist with. It is
+git-ignored, and it holds no secrets: the recovery code, the local bearer
+token, and the OAuth tokens never touch a file in this repository.
 
 Save both printed values in a password manager immediately. They are not shown
 again, and neither can be recovered from the database.
@@ -160,13 +166,6 @@ By design, and enforced by `.gitignore`:
 - Task output and event logs — they live in the state directory.
 - The rendered LaunchAgent plists, which contain absolute local paths. Only the
   templates in `config/` are committed.
-
-## A note on the committed hostname
-
-`mcp.markapidown.net` appears throughout `config/`, `docs/`, and as the default
-`AGENT_BRIDGE_PUBLIC_URL` — it is the author's own tunnel hostname. If you
-deploy this yourself, replace it with yours: it is only a default, and the
-bridge accepts any HTTPS `/mcp` URL through `AGENT_BRIDGE_PUBLIC_URL`.
 
 ## License
 

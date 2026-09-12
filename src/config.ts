@@ -33,7 +33,13 @@ export function loadConfig(env: NodeJS.ProcessEnv): BridgeConfig {
   if (roots.some((root) => !isAbsolute(root))) {
     throw new Error("AGENT_BRIDGE_ALLOWED_ROOTS must contain absolute paths");
   }
-  const publicUrl = new URL(env.AGENT_BRIDGE_PUBLIC_URL ?? "https://mcp.markapidown.net/mcp");
+  // Deliberately no default. This value is the OAuth issuer and resource identifier as well as
+  // the address clients connect to; a placeholder default would let a misconfigured deployment
+  // start and then advertise someone else's identity to its clients.
+  if (!env.AGENT_BRIDGE_PUBLIC_URL) {
+    throw new Error("AGENT_BRIDGE_PUBLIC_URL must be set to this bridge's public HTTPS /mcp endpoint (see .env.example)");
+  }
+  const publicUrl = new URL(env.AGENT_BRIDGE_PUBLIC_URL);
   if (publicUrl.protocol !== "https:" || publicUrl.pathname !== "/mcp") {
     throw new Error("Public URL must be an HTTPS /mcp endpoint");
   }

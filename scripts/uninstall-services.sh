@@ -9,7 +9,7 @@ set -euo pipefail
 
 LAUNCH_AGENTS_DIR="${LAUNCH_AGENTS_DIR:-$HOME/Library/LaunchAgents}"
 LAUNCHCTL_UID="$(id -u)"
-LABELS=(net.markapidown.agent-bridge net.markapidown.agent-tunnel)
+LABELS=(local.agent-bridge.bridge local.agent-bridge.tunnel)
 
 for LABEL in "${LABELS[@]}"; do
   launchctl bootout "gui/$LAUNCHCTL_UID/$LABEL" >/dev/null 2>&1 || true

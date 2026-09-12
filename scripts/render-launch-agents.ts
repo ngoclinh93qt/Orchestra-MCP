@@ -27,8 +27,8 @@ interface Template {
 }
 
 const TEMPLATES: readonly Template[] = [
-  { file: "net.markapidown.agent-bridge.plist.template", label: "net.markapidown.agent-bridge" },
-  { file: "net.markapidown.agent-tunnel.plist.template", label: "net.markapidown.agent-tunnel" },
+  { file: "local.agent-bridge.bridge.plist.template", label: "local.agent-bridge.bridge" },
+  { file: "local.agent-bridge.tunnel.plist.template", label: "local.agent-bridge.tunnel" },
 ];
 
 /**
@@ -64,6 +64,21 @@ export function renderPlists(options: RenderOptions): RenderedPlist[] {
   });
 }
 
+/**
+ * Renders the Codex plugin's `.mcp.json` from its template. The rendered file carries this
+ * deployment's own public URL, so it is git-ignored rather than committed — the repository keeps
+ * only the template.
+ */
+export function renderPluginMcpConfig(projectDir: string, publicUrl: string): string {
+  const pluginDir = join(projectDir, "plugins", "agent-bridge");
+  const template = readFileSync(join(pluginDir, ".mcp.json.template"), "utf8");
+  const finalPath = join(pluginDir, ".mcp.json");
+  const tmpPath = `${finalPath}.tmp-${process.pid}`;
+  writeFileSync(tmpPath, template.split("__PUBLIC_URL__").join(publicUrl), { mode: 0o644 });
+  renameSync(tmpPath, finalPath);
+  return finalPath;
+}
+
 function findCloudflaredBin(): string {
   for (const candidate of ["/opt/homebrew/bin/cloudflared", "/usr/local/bin/cloudflared"]) {
     if (existsSync(candidate)) return candidate;
@@ -97,6 +112,10 @@ function main(): void {
     // eslint-disable-next-line no-console
     console.log(`Rendered ${result.label} -> ${result.path}`);
   }
+
+  const mcpPath = renderPluginMcpConfig(projectDir, config.publicUrl.toString());
+  // eslint-disable-next-line no-console
+  console.log(`Rendered plugin MCP config -> ${mcpPath}`);
 }
 
 const isMain = process.argv[1] !== undefined && import.meta.url === `file://${resolve(process.argv[1])}`;

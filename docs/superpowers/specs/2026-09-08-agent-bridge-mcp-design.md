@@ -10,7 +10,7 @@ Build a private, single-user MCP service that lets ChatGPT control local Codex
 CLI and Claude Code sessions on this Mac. The same service has two entry paths:
 
 - local clients connect to `http://127.0.0.1:8787/mcp`;
-- ChatGPT on the web connects to `https://mcp.markapidown.net/mcp`, which a
+- ChatGPT on the web connects to `https://mcp.example.com/mcp`, which a
   named Cloudflare Tunnel forwards to the loopback listener.
 
 The service does not call the OpenAI API. ChatGPT use remains within the user's
@@ -67,7 +67,7 @@ ChatGPT Desktop / Codex local client
 
 ChatGPT Web
      |
-     | https://mcp.markapidown.net/mcp
+     | https://mcp.example.com/mcp
      v
 Cloudflare edge -> named Tunnel -> 127.0.0.1:8787
 ```
@@ -244,10 +244,10 @@ DNS, tunnel routing, and edge protection.
 Use a named, remotely managed tunnel, not a Quick Tunnel. Configure one route:
 
 ```text
-mcp.markapidown.net -> http://127.0.0.1:8787
+mcp.example.com -> http://127.0.0.1:8787
 ```
 
-The zone must be `markapidown.net`. Add a final catch-all route returning 404.
+The zone must be `example.com`. Add a final catch-all route returning 404.
 Install `cloudflared` and the tunnel as a macOS service/LaunchAgent after the
 user completes the browser-based Cloudflare authorization step. Store tunnel
 credentials with owner-only filesystem permissions.
@@ -260,7 +260,7 @@ healthy tunnel from a healthy local origin.
 
 Create a private plugin package that declares the remote HTTP MCP server at:
 
-`https://mcp.markapidown.net/mcp`
+`https://mcp.example.com/mcp`
 
 The package documents its two write tools and defaults them to approval. It
 contains no tunnel credential, provider credential, or OAuth token. Connect and
@@ -331,7 +331,7 @@ deleted by rollback.
 
 The setup is complete when:
 
-1. ChatGPT Web can authenticate to `mcp.markapidown.net`.
+1. ChatGPT Web can authenticate to `mcp.example.com`.
 2. It can list the six MCP tools.
 3. A user-approved call can start one safe Codex task and one safe Claude task
    in an allowlisted repository.

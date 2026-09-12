@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "agent-bridge": {
+      "type": "http",
+      "url": "__PUBLIC_URL__",
+      "oauth_resource": "__PUBLIC_URL__"
+    }
+  }
+}

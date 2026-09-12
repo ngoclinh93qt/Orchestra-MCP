@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>net.markapidown.agent-tunnel</string>
+  <string>local.agent-bridge.tunnel</string>
   <key>ProgramArguments</key>
   <array>
     <string>__CLOUDFLARED_BIN__</string>

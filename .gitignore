@@ -9,6 +9,9 @@ dist/
 # these patterns keep a stray copy out of a commit.
 .env
 .env.*
+!.env.example
+# Rendered from .mcp.json.template with your own public URL.
+plugins/agent-bridge/.mcp.json
 *.pem
 *.key
 *.p12
