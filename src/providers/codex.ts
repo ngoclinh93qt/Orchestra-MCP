@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { ProviderUnavailableError } from "../errors.js";
 import type { ContinueInput, ProviderAdapter, ProviderEvent, ProviderInvocation, StartInput } from "./provider.js";
+import { notFoundHint } from "./runtime.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -43,7 +44,8 @@ export class CodexAdapter implements ProviderAdapter {
     try {
       await execFileAsync(this.command, ["--version"], { timeout: this.probeTimeoutMs });
     } catch (error) {
-      throw new ProviderUnavailableError(`Codex CLI is not available: ${(error as Error).message}`);
+      const hint = (error as NodeJS.ErrnoException).code === "ENOENT" ? ` ${notFoundHint("codex")}` : "";
+      throw new ProviderUnavailableError(`Codex CLI is not available: ${(error as Error).message}.${hint}`);
     }
   }
 

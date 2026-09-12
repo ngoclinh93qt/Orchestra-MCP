@@ -9,6 +9,7 @@ import { configFilePath, ensureConfigFile, watchConfigFile } from "./policy/conf
 import { AccessPolicy, policiesEqual } from "./policy/files-policy.js";
 import { ClaudeAdapter } from "./providers/claude.js";
 import { CodexAdapter } from "./providers/codex.js";
+import { overrideVariable, resolveProviderRuntime } from "./providers/runtime.js";
 import { SessionStore } from "./sessions/session-store.js";
 import { EventLog } from "./store/event-log.js";
 import { TaskStore } from "./store/task-store.js";
@@ -44,6 +45,20 @@ async function main(): Promise<void> {
     },
   });
 
+  const runtime = await resolveProviderRuntime(process.env);
+  for (const [label, provider, command] of [
+    ["Codex CLI", "codex", runtime.codexCommand],
+    ["Claude Code CLI", "claude", runtime.claudeCommand],
+  ] as const) {
+    if (command) {
+      // eslint-disable-next-line no-console
+      console.log(`${label}: ${command}`);
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn(`${label} not found; agent tasks for it will fail. Set ${overrideVariable(provider)} to its absolute path.`);
+    }
+  }
+
   const taskStore = new TaskStore(join(config.stateDir, "bridge.sqlite3"));
   const eventLog = new EventLog(join(config.stateDir, "logs"));
   const oauthStore = new OAuthStore(join(config.stateDir, "bridge.sqlite3"));
@@ -52,7 +67,11 @@ async function main(): Promise<void> {
   const supervisor = new JobSupervisor({
     taskStore,
     eventLog,
-    adapters: { codex: new CodexAdapter(), claude: new ClaudeAdapter() },
+    adapters: {
+      codex: new CodexAdapter(runtime.codexCommand ? { command: runtime.codexCommand } : {}),
+      claude: new ClaudeAdapter(runtime.claudeCommand ? { command: runtime.claudeCommand } : {}),
+    },
+    baseEnv: runtime.childEnv,
     policy,
     maxConcurrentTotal: config.maxConcurrentTotal,
     maxConcurrentPerProvider: config.maxConcurrentPerProvider,

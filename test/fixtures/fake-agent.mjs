@@ -52,6 +52,12 @@ async function main() {
       process.exit(0);
       break;
     }
+    case "echo-env": {
+      const { HOME, PATH, BRIDGE_TEST_PARENT_ONLY } = process.env;
+      emit({ type: "final", text: JSON.stringify({ HOME, PATH, BRIDGE_TEST_PARENT_ONLY }) });
+      process.exit(0);
+      break;
+    }
     default: {
       process.stderr.write(`unknown FAKE_AGENT_MODE: ${mode}\n`);
       process.exit(2);

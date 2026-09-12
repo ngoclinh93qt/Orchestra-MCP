@@ -88,13 +88,20 @@ there is nothing to install or upload from this repository:
    dynamic client registration, so no client ID needs to be entered by
    hand) and opens the authorization page in a browser tab.
 5. Enter the recovery code from enrollment to approve the connection.
-6. In the chat composer, enable the connector for the conversation. The six
-   tools appear as `agent_start`, `agent_list`, `agent_status`,
-   `agent_output`, `agent_continue`, `agent_cancel` — `agent_start`,
+6. In the chat composer, enable the connector for the conversation. The
+   eleven tools are `repo_list`, `repo_read`, `repo_search`, `session_list`,
+   `session_read` (read-only), and `agent_start`, `agent_list`,
+   `agent_status`, `agent_output`, `agent_continue`, `agent_cancel` — `agent_start`,
    `agent_continue`, and `agent_cancel` will always prompt for your approval
    before running, because they are declared as mutating tools
    (`readOnlyHint: false`) in `src/mcp/tool-schemas.ts`; ChatGPT decides how
    to surface that approval, not this bridge.
+
+ChatGPT keeps the tool list it fetched when the connector was added. After
+the bridge gains or changes tools, open the connector in ChatGPT's settings
+and refresh it; otherwise ChatGPT keeps offering only the old tools. A
+connector added before the `repo_*` tools existed will, for example, try to
+read files by starting an agent instead.
 
 If the workspace does not expose custom connectors at all, custom MCP
 servers may be restricted by workspace policy; that is a workspace

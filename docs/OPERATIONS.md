@@ -76,6 +76,32 @@ The file is created on first start. If the legacy
 `allow` list so an existing deployment keeps the access it had. After that the
 file is the only source of truth and the variable is ignored.
 
+## Provider CLIs
+
+A LaunchAgent does not see your shell's PATH (launchd gives it only
+`/usr/bin:/bin:/usr/sbin:/sbin`), so the bridge locates each CLI itself at
+startup — first on its PATH, then in the usual install locations: Claude Code
+in `~/.local/bin`, the Codex CLI inside `/Applications/ChatGPT.app` (or
+`Codex.app`), then Homebrew and `/usr/local/bin`. The startup log names the
+binary each provider resolved to, or warns that one is missing.
+
+If a CLI lives somewhere else, set `AGENT_BRIDGE_CODEX_BIN` or
+`AGENT_BRIDGE_CLAUDE_BIN` to its absolute path in the bridge plist's
+`EnvironmentVariables` and restart. An override is used exactly as given: a
+wrong path fails loudly rather than quietly falling back to another binary.
+
+Agents run with a minimal environment — `HOME`, `USER`, locale, and a PATH
+that adds the bridge's own Node directory, `~/.local/bin`, and Homebrew — and
+nothing else from the bridge's environment.
+
+Two things the bridge cannot fix for you:
+
+- Each CLI must be logged in on this Mac (`claude auth status`, `codex login
+  status`). A logged-out CLI starts, then fails its task with an
+  authentication error.
+- Codex refuses to run outside a git repository. Point `agent_start` at a
+  repository, not a parent folder of several.
+
 ## Health checks
 
 ```bash

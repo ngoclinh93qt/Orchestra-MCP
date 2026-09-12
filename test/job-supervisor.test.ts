@@ -61,7 +61,7 @@ const harnesses: Harness[] = [];
 
 async function buildHarness(
   mode: string,
-  overrides: Partial<{ maxConcurrentTotal: number; maxConcurrentPerProvider: number; maxPromptBytes: number; gracefulTimeoutMs: number }> = {},
+  overrides: Partial<{ maxConcurrentTotal: number; maxConcurrentPerProvider: number; maxPromptBytes: number; gracefulTimeoutMs: number; baseEnv: Record<string, string> }> = {},
 ): Promise<Harness> {
   const base = await mkdtemp(join(tmpdir(), "bridge-supervisor-"));
   const cwd = join(base, "repo");
@@ -77,6 +77,7 @@ async function buildHarness(
     maxConcurrentPerProvider: overrides.maxConcurrentPerProvider ?? 1,
     maxPromptBytes: overrides.maxPromptBytes ?? 1_000_000,
     gracefulTimeoutMs: overrides.gracefulTimeoutMs ?? 50,
+    ...(overrides.baseEnv ? { baseEnv: overrides.baseEnv } : {}),
   });
   const harness = { supervisor, taskStore, eventLog, cwd };
   harnesses.push(harness);
@@ -105,6 +106,25 @@ describe("JobSupervisor", () => {
 
     const page = eventLog.read(task.id, { cursor: 0, limit: 10 });
     expect(page.events.some((e) => e["type"] === "final")).toBe(true);
+  });
+
+  it("runs the provider with the base environment and nothing else from the bridge", async () => {
+    process.env.BRIDGE_TEST_PARENT_ONLY = "must-not-reach-the-agent";
+    try {
+      const { supervisor, taskStore, eventLog, cwd } = await buildHarness("echo-env", {
+        baseEnv: { HOME: "/Users/agent-home", PATH: "/opt/agent/bin:/usr/bin:/bin" },
+      });
+      const task = await supervisor.start({ provider: "codex", cwd, prompt: "hello" });
+      await waitUntil(() => taskStore.get(task.id)?.state === "succeeded");
+
+      const final = eventLog.read(task.id, { cursor: 0, limit: 10 }).events.find((e) => e["type"] === "final");
+      expect(JSON.parse(String(final?.["text"]))).toEqual({
+        HOME: "/Users/agent-home",
+        PATH: "/opt/agent/bin:/usr/bin:/bin",
+      });
+    } finally {
+      delete process.env.BRIDGE_TEST_PARENT_ONLY;
+    }
   });
 
   it("marks a nonzero exit as failed with a redacted-clean error summary", async () => {
