@@ -2,3 +2,31 @@
 node_modules/
 dist/
 .superpowers/
+
+# Never commit real credentials or local state. Every secret this project uses
+# (OAuth tokens, the recovery code, the local bearer token, the Cloudflare
+# tunnel credentials) belongs outside the repository — see README.md — but
+# these patterns keep a stray copy out of a commit.
+.env
+.env.*
+*.pem
+*.key
+*.p12
+credentials.json
+*.cloudflared.json
+.cloudflared/
+
+# Runtime state: the bridge's database and its logs live in the state
+# directory, but keep them ignored in case one is ever created in-tree.
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+*.log
+logs/
+
+# Rendered from the templates in config/ with real local paths.
+*.plist
+!config/*.plist.template
+
+.DS_Store
+scratchpad/
