@@ -1,116 +1,181 @@
 # Agent Bridge MCP
 
-A local MCP server that lets a remote client — ChatGPT on the web, Codex CLI,
-Claude Code — read a folder on your Mac and run Codex or Claude Code tasks in
-it, under access rules only you can change.
+> A local agent orchestrator for supervising coding agents across your repositories.
 
-It runs as a macOS LaunchAgent bound to `127.0.0.1`, and is reached from the
-internet only through a Cloudflare Tunnel you own, with OAuth in front of every
-tool call.
+Agent Bridge MCP gives ChatGPT, Codex CLI, and Claude Code a controlled view of
+the repositories on your Mac. A connected MCP client can inspect repository
+context, review Codex and Claude Code sessions, start or continue supervised
+agent tasks, and retrieve redacted task output.
 
-## What it is for
+The bridge is the control plane. Codex CLI and Claude Code remain the workers;
+your Mac remains the source of truth for files, access policy, and credentials.
 
-ChatGPT can reason about your code but cannot see it. Pasting files into a chat
-does not scale, and giving a hosted assistant a shell on your laptop is not a
-trade most people want to make. This bridge takes the middle path: a fixed set
-of tools, a folder allowlist you edit by hand, and no way for the connected
-client to widen its own access.
+## Why it exists
 
-## Security model
+Running several coding agents across several repositories quickly becomes hard
+to follow: which repository is safe to inspect, which task is still running,
+what did an agent change, and where did it fail?
 
-The whole design follows from one rule: **the client is not trusted to decide
-what it may reach.**
+Agent Bridge MCP provides a deliberately small orchestration surface instead
+of handing a remote client a shell on your machine. It makes existing agent
+work observable and controllable while keeping repository access under a
+policy only the owner can change.
 
-- **Authorization lives on the server.** Which folders are reachable is read
-  from a config file on your Mac. No tool can edit it. A client can only ask
-  for a path — never grant itself one.
-- **Deny wins.** A denied path is refused directly, hidden from listings of its
-  allowed parent, skipped by search, and rejected as a task's working
-  directory — so an agent cannot be pointed at it to read it on your behalf.
-- **Loopback only.** The HTTP server binds `127.0.0.1` and refuses to start on
-  any other host. Public reachability is the tunnel's job, not the server's.
-- **Every call is authenticated.** Remote clients use OAuth 2.1 with PKCE,
-  dynamic client registration, and rotating refresh tokens; loopback clients
-  may use a local bearer token instead. There is no unauthenticated fallback
-  path.
-- **Secrets are stored hashed.** Authorization codes, tokens, the recovery
-  code, and the local bearer token exist in plaintext exactly once, when they
-  are issued. The database keeps only SHA-256 hashes.
-- **Output is redacted.** File content, session history, and task output all
-  pass through the same secret-redaction rule before leaving the machine.
-- **No shell tool.** There is deliberately no `run_shell`, no arbitrary
-  executable, and no tool that writes a file. Code changes happen only through
-  a supervised Codex or Claude Code task, which the MCP client prompts you to
-  approve.
+```mermaid
+flowchart LR
+  C[ChatGPT / Codex / Claude] -->|MCP + OAuth| B[Agent Bridge MCP]
+  B --> R[Allowed local repositories]
+  B --> S[Codex & Claude session history]
+  B --> J[Task supervisor]
+  J --> X[Codex CLI]
+  J --> Y[Claude Code]
+  B --> D[SQLite task state + redacted event logs]
+```
 
-Nothing in this repository contains a real token, client secret, recovery code,
-or tunnel credential — see [What is not in this repository](#what-is-not-in-this-repository).
+## What it can do today
 
-## Tools
+### Inspect repository context
 
-Every request needs the `agent:read` scope; the three tools that change
-something additionally require `agent:write`, so a read-only token cannot start
-or cancel a task. Those three are also annotated as non-read-only, which is
-what makes an MCP client prompt for approval before running them.
+- List files and directories below an allowed root.
+- Read bounded line ranges from text files.
+- Search for literal text across an allowed path.
+- Enforce a fixed ignore list for `.git`, `.env*`, `node_modules`, and common
+  build or cache output.
 
-| Tool | Read-only | What it does |
-|---|---|---|
-| `repo_list` | yes | List files and directories under an allowed path |
-| `repo_read` | yes | Read a file by line range |
-| `repo_search` | yes | Literal substring search across an allowed path |
-| `session_list` | yes | List Codex / Claude Code terminal sessions in allowed folders |
-| `session_read` | yes | Read one session's history |
-| `agent_list` | yes | List bridge tasks |
-| `agent_status` | yes | Status of one task |
-| `agent_output` | yes | Paginated, redacted output of one task |
-| `agent_start` | no | Start a Codex or Claude Code task in an allowed folder |
-| `agent_continue` | no | Send a follow-up to a finished or waiting task |
-| `agent_cancel` | no | Cancel a running task |
+### Observe agent work
 
-`.git`, `.env*`, `node_modules`, and common build output are excluded from
-listing and search, and refused by `repo_read`. That list is fixed in code; a
-caller cannot ask to skip it.
+- Discover and read Codex CLI and Claude Code session history within allowed
+  repositories.
+- List bridge tasks and retrieve their current state.
+- Read paginated, redacted output events for a task.
+- Preserve task metadata and logs across bridge restarts; active tasks that can
+  no longer be supervised are marked `interrupted`.
+
+### Coordinate coding agents
+
+- Start Codex or Claude Code in an allowed working directory.
+- Continue a finished or waiting provider session as a linked child task.
+- Cancel a running task, including its process group.
+- Bound prompt size and concurrent work globally and per provider.
+
+## MCP tool surface
+
+Every request requires `agent:read`. Mutating tools also require
+`agent:write` and are declared non-read-only so compatible MCP clients can
+ask for approval before they run.
+
+| Area | Tool | Access | Purpose |
+|---|---|---:|---|
+| Repository | `repo_list` | Read | List files and directories under an allowed path. |
+| Repository | `repo_read` | Read | Read a text file by line range. |
+| Repository | `repo_search` | Read | Search literal text under an allowed path. |
+| Sessions | `session_list` | Read | Find Codex and Claude Code sessions in allowed repositories. |
+| Sessions | `session_read` | Read | Read one paginated provider session. |
+| Tasks | `agent_list` | Read | List bridge tasks by provider or state. |
+| Tasks | `agent_status` | Read | Get the state of one task. |
+| Tasks | `agent_output` | Read | Read paginated, redacted task events. |
+| Tasks | `agent_start` | Write | Start a Codex or Claude Code task. |
+| Tasks | `agent_continue` | Write | Continue a finished or waiting task. |
+| Tasks | `agent_cancel` | Write | Cancel a running task. |
+
+## Security boundary
+
+The connected client is not trusted to decide what it may reach.
+
+- **Owner-controlled access policy.** Reachable paths live in a local
+  allowlist/denylist config file. MCP tools cannot edit it.
+- **Deny wins.** Denied paths are refused directly, hidden from listings,
+  skipped by search, and rejected as task working directories.
+- **Loopback-only server.** The HTTP server binds only to `127.0.0.1`.
+  Cloudflare Tunnel is optional and is the only supported public ingress.
+- **OAuth and scopes.** Enrolled deployments use OAuth 2.1 with PKCE, dynamic
+  client registration, rotating refresh tokens, and `agent:read` /
+  `agent:write` scopes. Loopback clients can use a local bearer token.
+- **Secret-safe persistence.** Authorization codes, OAuth tokens, the recovery
+  code, and local bearer token are stored as SHA-256 hashes.
+- **Redaction before egress.** Repository content, provider session history,
+  and task output use the same secret-redaction layer before leaving the Mac.
+- **No arbitrary shell.** There is no `run_shell`, arbitrary executable,
+  environment override, sandbox-bypass flag, or direct file-writing MCP tool.
+  Code changes are performed only through supervised provider tasks.
+
+> Before `npm run enroll-owner` has completed, the bridge permits an
+> unauthenticated loopback bootstrap mode. Do not expose it through a tunnel or
+> any public network path until owner enrollment is complete.
+
+## Orchestration roadmap
+
+The current release establishes the secure execution and observation layer.
+The next work should make it feel like an orchestrator rather than a remote
+task launcher.
+
+### Completed
+
+- [x] Read repository files and search allowed repositories.
+- [x] Inspect Codex and Claude Code session history.
+- [x] Start, continue, monitor, and cancel provider tasks.
+- [x] Persist task state and redact output.
+- [x] Enforce owner-managed file policy, OAuth, and scoped write access.
+- [x] Run as a loopback macOS service with optional Cloudflare ingress.
+
+### Next priorities
+
+- [ ] **Repository intelligence:** `repo_status`, `repo_diff`, `repo_log`,
+  and a repository overview built from fixed, read-only Git operations.
+- [ ] **Task queue:** priorities, queued execution, pause/resume, and limits
+  per repository as well as per provider.
+- [ ] **Task timeline:** normalized provider events such as running,
+  waiting-for-input, completed, failed, and cancelled.
+- [ ] **Watch and notification:** notify only when a task completes, fails,
+  needs input, or exceeds a time limit.
+- [ ] **Structured workflows:** review a diff, investigate a failure, plan
+  work, and hand off useful context between providers.
+- [ ] **Task memory:** retain summaries, decisions, relevant files, Git
+  revision, and parent/child relationships for safe continuation.
+- [ ] **Cross-repository workspaces:** group related repositories without
+  bypassing the access policy.
+
+### Intentionally out of scope
+
+- An arbitrary remote shell.
+- Direct file-write or executable-run MCP tools.
+- Automatically widening access policy from a connected client.
+- A web dashboard before the queue, timeline, and workflow model are stable.
 
 ## Requirements
 
-- macOS with the Codex CLI and/or Claude Code installed **and logged in**. The
-  bridge starts them; it cannot log in for them.
-- Node 26 (`.nvmrc`). `better-sqlite3` is a native module, so the Node that
-  runs the service must match the Node it was built against.
-- A Cloudflare account and a domain, only if you want remote access. Loopback
-  clients work without one.
+- macOS with Codex CLI and/or Claude Code installed **and logged in**. The
+  bridge starts these CLIs; it cannot authenticate them for you.
+- Node 26, as pinned by [`.nvmrc`](.nvmrc). `better-sqlite3` is native, so it
+  must be compiled for the Node version that runs the service.
+- A Cloudflare account and domain only when remote access is required.
 
 ## Quick start
 
 ```bash
 npm install
-cp .env.example .env  # then edit: your public URL and your folders
-npm run verify        # typecheck, tests, build
-npm run enroll-owner  # prints a recovery code and a local bearer token, once
-```
-
-`.env` holds this deployment's own settings — the public HTTPS endpoint your
-tunnel routes here, and the folders to seed the allowlist with. It is
-git-ignored, and it holds no secrets: the recovery code, the local bearer
-token, and the OAuth tokens never touch a file in this repository.
-
-Save both printed values in a password manager immediately. They are not shown
-again, and neither can be recovered from the database.
-
-Then install the LaunchAgents, and the tunnel if you want remote access:
-
-```bash
+cp .env.example .env       # edit the public URL and initial allowed folders
+npm run verify             # typecheck, test, build
+npm run enroll-owner       # prints a recovery code and local bearer token once
 scripts/install-services.sh
 ```
 
-Full deployment steps, including the one-time Cloudflare setup, are in
-[docs/OPERATIONS.md](docs/OPERATIONS.md).
+Save the recovery code and local bearer token in a password manager. They are
+shown only at enrollment and cannot be recovered from the SQLite database.
 
-## Choosing what the bridge can reach
+`.env` is git-ignored and holds deployment settings such as the public HTTPS
+endpoint and initial allowlist roots. It does not store OAuth tokens, recovery
+codes, bearer tokens, or tunnel credentials.
 
-One file, edited by you and never by a connected client:
+For the Cloudflare and LaunchAgent setup, see
+[docs/OPERATIONS.md](docs/OPERATIONS.md). For connecting ChatGPT, Codex CLI,
+or Claude Code, see [docs/CONNECT_CHATGPT.md](docs/CONNECT_CHATGPT.md).
 
-```
+## Access policy
+
+The owner edits one local file; a connected agent cannot change it:
+
+```text
 ~/Library/Application Support/Agent Bridge MCP/config.json
 ```
 
@@ -123,50 +188,54 @@ One file, edited by you and never by a connected client:
 }
 ```
 
-Saving the file applies it immediately — no restart. A file that fails to parse
-is rejected with a logged reason, and the previous policy stays in force, so a
-typo can neither widen access nor take the bridge down. An empty `allow` list
-means nothing is reachable.
+Saving applies a valid policy immediately. If the file cannot be parsed or
+validated, the bridge logs the error and retains the last valid policy. An
+empty `allow` list makes no repository reachable.
 
-## Connecting a client
-
-[docs/CONNECT_CHATGPT.md](docs/CONNECT_CHATGPT.md) covers all three: ChatGPT on
-the web (a workspace admin adds a custom connector), Codex CLI (this repo is
-also a local Codex plugin marketplace), and Claude Code.
-
-## Development
+## Development and verification
 
 ```bash
-npm run verify     # typecheck + full test suite + build
-npm test           # tests only
+npm run typecheck
+npm test
+npm run build
+npm run verify
 ```
 
-Tests never touch a real provider CLI, a real network, or real launchd state —
-a fake agent fixture stands in for Codex and Claude Code.
+Tests use fake provider processes and never invoke a real coding-agent CLI,
+network service, or LaunchAgent.
 
-Layout:
+If tests fail with a `better-sqlite3` `NODE_MODULE_VERSION` error after
+switching Node versions, rebuild the native dependency for the active Node:
 
-```
-src/auth/        OAuth server, local bearer token, enrollment
-src/policy/      the access policy and its hot-reloading config file
-src/repo/        path containment, ignore list, file reading and search
-src/sessions/    reading Codex and Claude Code session history off disk
-src/supervisor/  task lifecycle, process spawning, cancellation
-src/mcp/         tool schemas and registration
-docs/superpowers/  the design specs and plans this was built from
+```bash
+npm rebuild better-sqlite3
 ```
 
-## What is not in this repository
+## Project layout
 
-By design, and enforced by `.gitignore`:
+```text
+src/auth/        OAuth provider, enrollment, bearer-token verification
+src/http/        Loopback HTTP and MCP Streamable HTTP transport
+src/mcp/         Tool schemas, scope checks, and handlers
+src/policy/      Owner-managed access policy and hot-reloaded config file
+src/repo/        Path safety, ignore rules, file reading, and search
+src/sessions/    Codex and Claude Code session discovery and reading
+src/providers/   Provider adapters and runtime discovery
+src/supervisor/  Task lifecycle, process spawning, cancellation, limits
+src/store/       SQLite task/OAuth state and JSONL event logs
+docs/            Connection and operations guides
+```
 
-- OAuth tokens, the recovery code, and the local bearer token — they live only
-  in the state directory's SQLite database, and only as hashes.
-- Cloudflare tunnel credentials — they live in `~/.cloudflared/`.
-- Task output and event logs — they live in the state directory.
-- The rendered LaunchAgent plists, which contain absolute local paths. Only the
-  templates in `config/` are committed.
+## Data that never belongs in this repository
+
+- OAuth tokens, recovery code, and local bearer token.
+- Cloudflare tunnel credentials.
+- Provider task output and event logs.
+- Rendered LaunchAgent plists containing machine-specific absolute paths.
+
+The repository only contains templates and code. Runtime secrets and state
+live outside the checkout.
 
 ## License
 
-None yet. All rights reserved by the author until one is chosen.
+No license has been selected yet. All rights reserved by the author.
