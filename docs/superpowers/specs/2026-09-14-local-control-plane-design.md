@@ -53,16 +53,16 @@ The current adapters normalize recognizable rate-limit/quota/unavailable events 
 
 ## Handoff packet and proposals
 
-For a new profile or provider, `RoutingService` creates a bounded handoff packet:
+For an automatic switch of an active task, `RoutingService` creates a bounded in-memory handoff packet:
 
 - original task request and working directory;
 - git status/diff summary, limited by byte budget;
 - recent event-log entries after secret redaction;
 - previous provider/profile, failure reason, and next requested outcome.
 
-The packet is inserted into the new task prompt; raw environment variables, credentials, unredacted logs, and an entire session transcript are never included. It is not persisted as a separate secret-bearing document.
+The packet is inserted into the new child task prompt; raw environment variables, credentials, unredacted logs, and an entire session transcript are never included. The original prompt and packet remain in the active process only and are never persisted. A bridge restart therefore stops automatic failover for an interrupted task.
 
-For non-automatic scenarios, a routing proposal is stored in SQLite: source task, candidate profile, generated packet, reason, `pending|approved|rejected|expired` state, and timestamps. The dashboard lets the owner approve or reject it. Approval creates exactly one child task; repeated clicks are idempotent.
+For non-automatic scenarios, a routing proposal is stored in SQLite: source task, candidate profile, reason, `pending|approved|rejected|expired` state, and timestamps. It never stores a prompt or handoff. The dashboard lets the owner approve or reject it; approval requires the owner to enter the next instruction and creates exactly one child task. Repeated clicks are idempotent.
 
 ## Local admin UI
 
@@ -73,7 +73,7 @@ Views:
 1. **Dashboard** — active/recent tasks, selected profile, routing chain, availability and pending proposals.
 2. **Access policy** — allow/deny folders, with server-side absolute-path validation.
 3. **Providers and profiles** — enable providers; create/edit/delete profiles; choose model, reasoning, and ordered fallback profiles.
-4. **Proposal detail** — inspect the redacted handoff preview, approve/reject, or manually switch a terminal/waiting task to an allowed profile.
+4. **Proposal detail** — inspect the source task's safe summary, approve/reject with an owner-provided next instruction, or manually switch a terminal/waiting task to an allowed profile.
 
 Read routes return only existing safe task summaries and redacted event data. Mutation routes require JSON, a same-origin `Origin` header matching the loopback origin, and the CSRF token rendered into the initial page. They reject missing/foreign origins and accept no credentials from CORS. The app emits `Cache-Control: no-store` for admin pages and APIs. `/admin` is not mounted behind the MCP OAuth middleware and must not be exposed by any ingress rule.
 
