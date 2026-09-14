@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { renderPlists } from "../scripts/render-launch-agents.js";
+import { parseIngressProfile, renderPlists } from "../scripts/render-launch-agents.js";
 
 const execFileAsync = promisify(execFile);
 const repoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -16,7 +16,7 @@ async function plutilToJson(path: string): Promise<Record<string, unknown>> {
   return JSON.parse(stdout) as Record<string, unknown>;
 }
 
-async function renderIntoTemp(): Promise<{ targetDir: string; stateDir: string; results: { label: string; path: string }[] }> {
+async function renderIntoTemp(ingress: "cloudflare" | "external" = "cloudflare"): Promise<{ targetDir: string; stateDir: string; results: { label: string; path: string }[] }> {
   const base = await mkdtemp(join(tmpdir(), "bridge-launchagents-"));
   const targetDir = join(base, "LaunchAgents");
   const stateDir = join(base, "state");
@@ -30,11 +30,18 @@ async function renderIntoTemp(): Promise<{ targetDir: string; stateDir: string; 
     publicUrl: "https://mcp.example.com/mcp",
     cloudflaredBin: "/opt/homebrew/bin/cloudflared",
     cloudflaredConfig: join(base, "cloudflared-config.yml"),
+    ingress,
   });
   return { targetDir, stateDir, results };
 }
 
 describe("rendered LaunchAgent plists", () => {
+  it("rejects an unknown ingress profile", () => {
+    expect(() => parseIngressProfile("unknown")).toThrow(
+      'AGENT_BRIDGE_INGRESS must be "cloudflare" or "external"',
+    );
+  });
+
   it("renders the bridge plist with loopback-safe, absolute, secret-free configuration", async () => {
     const { results, stateDir } = await renderIntoTemp();
     const bridgePlist = results.find((r) => r.label === "local.agent-bridge.bridge")!;
@@ -69,6 +76,11 @@ describe("rendered LaunchAgent plists", () => {
     for (const arg of args) if (arg.includes("/")) expect(arg.startsWith("/")).toBe(true);
   });
 
+  it("renders only the bridge plist for an externally managed ingress", async () => {
+    const { results } = await renderIntoTemp("external");
+    expect(results.map((result) => result.label)).toEqual(["local.agent-bridge.bridge"]);
+  });
+
   it("renders byte-identical output across repeated runs into the same directory", async () => {
     const base = await mkdtemp(join(tmpdir(), "bridge-launchagents-idempotent-"));
     const targetDir = join(base, "LaunchAgents");
@@ -82,6 +94,7 @@ describe("rendered LaunchAgent plists", () => {
       publicUrl: "https://mcp.example.com/mcp",
       cloudflaredBin: "/opt/homebrew/bin/cloudflared",
       cloudflaredConfig: join(base, "cloudflared-config.yml"),
+      ingress: "cloudflare" as const,
     };
 
     const first = renderPlists(options);
@@ -162,6 +175,7 @@ exit 0
       LAUNCH_AGENTS_DIR: launchAgentsDir,
       AGENT_BRIDGE_ALLOWED_ROOTS: base,
       AGENT_BRIDGE_STATE_DIR: stateDir,
+      AGENT_BRIDGE_PUBLIC_URL: "https://mcp.example.com/mcp",
     };
 
     await execFileAsync("bash", [join(repoRoot, "scripts", "install-services.sh")], { env });
@@ -195,6 +209,7 @@ exit 0
       LAUNCH_AGENTS_DIR: launchAgentsDir,
       AGENT_BRIDGE_ALLOWED_ROOTS: base,
       AGENT_BRIDGE_STATE_DIR: stateDir,
+      AGENT_BRIDGE_PUBLIC_URL: "https://mcp.example.com/mcp",
     };
 
     await execFileAsync("bash", [join(repoRoot, "scripts", "install-services.sh")], { env });
@@ -224,6 +239,7 @@ exit 0
       LAUNCH_AGENTS_DIR: launchAgentsDir,
       AGENT_BRIDGE_ALLOWED_ROOTS: base,
       AGENT_BRIDGE_STATE_DIR: stateDir,
+      AGENT_BRIDGE_PUBLIC_URL: "https://mcp.example.com/mcp",
     };
 
     await execFileAsync("bash", [join(repoRoot, "scripts", "install-services.sh")], { env });
@@ -238,6 +254,34 @@ exit 0
     // The whole point of a recoverable rollback: state survives uninstall untouched.
     expect(existsSync(sentinel)).toBe(true);
     expect(await readFile(sentinel, "utf8")).toBe("not a real database, just a marker");
+  }, 30000);
+
+  it("installs only the bridge for an external ingress", async () => {
+    const base = await mkdtemp(join(tmpdir(), "bridge-install-external-"));
+    const launchAgentsDir = join(base, "LaunchAgents");
+    const stateDir = join(base, "state");
+    const fakeBinDir = join(base, "fakebin");
+    const logPath = join(base, "launchctl.log");
+    await mkdir(fakeBinDir, { recursive: true });
+    await mkdir(stateDir, { recursive: true });
+    await makeFakeLaunchctl(fakeBinDir, logPath);
+
+    await execFileAsync("bash", [join(repoRoot, "scripts", "install-services.sh")], {
+      env: {
+        ...process.env,
+        PATH: `${fakeBinDir}:${process.env.PATH}`,
+        LAUNCH_AGENTS_DIR: launchAgentsDir,
+        AGENT_BRIDGE_ALLOWED_ROOTS: base,
+        AGENT_BRIDGE_STATE_DIR: stateDir,
+        AGENT_BRIDGE_PUBLIC_URL: "https://mcp.example.com/mcp",
+        AGENT_BRIDGE_INGRESS: "external",
+      },
+    });
+
+    expect(existsSync(join(launchAgentsDir, "local.agent-bridge.bridge.plist"))).toBe(true);
+    expect(existsSync(join(launchAgentsDir, "local.agent-bridge.tunnel.plist"))).toBe(false);
+    const log = await readFile(logPath, "utf8");
+    expect(log.split("\n").filter((line) => line.includes("bootstrap")).length).toBe(1);
   }, 30000);
 });
 

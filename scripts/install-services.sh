@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Renders and installs both LaunchAgents (the bridge, then the tunnel), starting each fresh.
+# Renders and installs the bridge plus any ingress LaunchAgent managed by the selected profile.
 # Idempotent: bootout-then-bootstrap means running this twice converges to the same running
 # state rather than erroring on an already-loaded label.
 #
@@ -11,7 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 LAUNCH_AGENTS_DIR="${LAUNCH_AGENTS_DIR:-$HOME/Library/LaunchAgents}"
 LAUNCHCTL_UID="$(id -u)"
-LABELS=(local.agent-bridge.bridge local.agent-bridge.tunnel)
+LABELS=(local.agent-bridge.bridge)
 # Any other LaunchAgent already bound to this bridge's port would fight the one being installed
 # for it. Renaming the service labels is the usual way to end up with one, so refuse rather than
 # install a plist that will crash-loop on EADDRINUSE.
@@ -29,6 +29,16 @@ if [ -z "${AGENT_BRIDGE_PUBLIC_URL:-}" ]; then
   echo "Fix: cp $PROJECT_DIR/.env.example $PROJECT_DIR/.env and fill in your own values." >&2
   exit 1
 fi
+
+INGRESS="${AGENT_BRIDGE_INGRESS:-cloudflare}"
+case "$INGRESS" in
+  cloudflare) LABELS+=(local.agent-bridge.tunnel) ;;
+  external) ;;
+  *)
+    echo "AGENT_BRIDGE_INGRESS must be cloudflare or external, got: $INGRESS" >&2
+    exit 1
+    ;;
+esac
 
 # The Node binary baked into the bridge plist and the Node ABI native modules (better-sqlite3)
 # are compiled against must be the exact same binary, or the service crash-loops on startup with
@@ -57,7 +67,11 @@ mkdir -p "$LAUNCH_AGENTS_DIR"
 
 echo "Rendering LaunchAgent plists into $LAUNCH_AGENTS_DIR ..."
 RENDER_TARGET_DIR="$LAUNCH_AGENTS_DIR" RENDER_PROJECT_DIR="$PROJECT_DIR" RENDER_NODE_BIN="$NODE_BIN" \
-  npx tsx "$SCRIPT_DIR/render-launch-agents.ts"
+  AGENT_BRIDGE_INGRESS="$INGRESS" npx tsx "$SCRIPT_DIR/render-launch-agents.ts"
+
+if [ "$INGRESS" = "external" ]; then
+  echo "External ingress selected: install and manage the tunnel or reverse proxy separately."
+fi
 
 for LABEL in "${LABELS[@]}"; do
   PLIST="$LAUNCH_AGENTS_DIR/$LABEL.plist"

@@ -1,11 +1,11 @@
 # Operations
 
-This covers running the bridge and its tunnel as macOS background services,
+This covers running the bridge and, for the Cloudflare profile, its tunnel as macOS background services,
 health-checking them, and rolling the whole thing back. It assumes
 `npm run verify` passes and `npm run enroll-owner` has already been run once
 (see `docs/CONNECT_CHATGPT.md` for connecting clients afterward).
 
-## Install
+## Install with the managed Cloudflare profile
 
 ```bash
 cp .env.example .env             # your public URL and your folders; git-ignored
@@ -17,6 +17,11 @@ scripts/install-cloudflared.sh   # no-op if cloudflared is already on PATH
 `scripts/install-services.sh` reads it when rendering the plists and the Codex
 plugin's `.mcp.json`, and refuses to run without `AGENT_BRIDGE_PUBLIC_URL`.
 Re-run that script after changing a value — the installed plist carries a copy.
+
+This is the default `AGENT_BRIDGE_INGRESS=cloudflare` profile. For an
+operator-managed ingress such as OpenAI Secure MCP Tunnel, set
+`AGENT_BRIDGE_INGRESS=external`; the installer then creates only the bridge
+LaunchAgent. See [TRANSPORTS.md](TRANSPORTS.md).
 
 Before installing the tunnel LaunchAgent, complete the one-time Cloudflare
 login and named-tunnel creation (interactive; needs your Cloudflare account):
@@ -156,10 +161,11 @@ stays stopped until you kickstart it or reboot triggers `RunAtLoad`.
 Each step here is independently reversible and none of them deletes state:
 
 ```bash
-# 1. Stop and unload both services; removes the two plist files only.
+# 1. Stop and unload bridge and any managed Cloudflare service; removes only
+# their plist files.
 scripts/uninstall-services.sh
 
-# 2. Disable the public hostname (Cloudflare dashboard, or):
+# 2. For the Cloudflare profile, disable the public hostname (dashboard, or):
 cloudflared tunnel route dns --overwrite-dns agent-bridge <somewhere-else>
 # or delete the DNS record entirely from the Cloudflare dashboard.
 
