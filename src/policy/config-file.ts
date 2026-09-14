@@ -2,11 +2,22 @@ import { watch, type FSWatcher } from "node:fs";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { parseFilesPolicy, PolicyValidationError, type FilesPolicy } from "./files-policy.js";
+import {
+  DEFAULT_PROVIDER_POLICIES,
+  parseExecutionProfiles,
+  parseProviderPolicies,
+  type ExecutionProfile,
+  type ProviderPolicies,
+} from "./execution-profiles.js";
 
 export const CONFIG_FILE_NAME = "config.json";
 
 export interface BridgeFileConfig {
   readonly files: FilesPolicy;
+  /** Omitted only by old callers; parsed config is always version 2. */
+  readonly version?: 2;
+  readonly providers?: ProviderPolicies;
+  readonly profiles?: readonly ExecutionProfile[];
 }
 
 /** Explains the file to whoever opens it, since JSON has no comments. Ignored by the parser. */
@@ -33,14 +44,23 @@ export function parseConfig(text: string): BridgeFileConfig {
   }
   const record = raw as Record<string, unknown>;
   if (record.files === undefined) throw new PolicyValidationError("config must contain a files section");
-  return { files: parseFilesPolicy(record.files) };
+  const providers = parseProviderPolicies(record.providers);
+  return Object.freeze({
+    version: 2 as const,
+    files: parseFilesPolicy(record.files),
+    providers,
+    profiles: parseExecutionProfiles(record.profiles ?? [], providers),
+  });
 }
 
 export function serializeConfig(config: BridgeFileConfig): string {
   return `${JSON.stringify(
     {
+      version: 2,
       _readme: README_LINES,
       files: { allow: [...config.files.allow], deny: [...config.files.deny] },
+      providers: config.providers ?? DEFAULT_PROVIDER_POLICIES,
+      profiles: config.profiles ?? [],
     },
     null,
     2,
@@ -75,7 +95,7 @@ export async function ensureConfigFile(path: string, seedAllow: readonly string[
   }
   const seeded: BridgeFileConfig = { files: { allow: [...seedAllow], deny: [] } };
   await writeConfigAtomically(path, seeded);
-  return seeded;
+  return readConfigFile(path);
 }
 
 export interface WatchConfigHandlers {
