@@ -19,6 +19,11 @@ describe("CodexAdapter", () => {
     expect(invocation.args.join(" ")).not.toContain("do the thing");
   });
 
+  it("passes the approved profile model without widening sandbox permissions", () => {
+    const invocation = adapter.newInvocation({ cwd: "/tmp/repo", prompt: "x", model: "gpt-5.6-luna" });
+    expect(invocation.args).toEqual(expect.arrayContaining(["--model", "gpt-5.6-luna"]));
+  });
+
   it("never uses a sandbox or approval bypass flag", () => {
     const invocation = adapter.newInvocation({ cwd: "/tmp/repo", prompt: "hello" });
     const resumed = adapter.resumeInvocation({ cwd: "/tmp/repo", prompt: "hello", providerSessionId: "s-1" });

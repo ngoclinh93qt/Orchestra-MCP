@@ -29,6 +29,11 @@ describe("ClaudeAdapter", () => {
     expect(invocation.stdin).toBe("");
   });
 
+  it("passes the approved profile model and reasoning effort", () => {
+    const invocation = adapter.newInvocation({ cwd: "/tmp/repo", prompt: "x", model: "sonnet", reasoning: "high" });
+    expect(invocation.args).toEqual(expect.arrayContaining(["--model", "sonnet", "--effort", "high"]));
+  });
+
   it("never uses a permission bypass flag", () => {
     const invocation = adapter.newInvocation({ cwd: "/tmp/repo", prompt: "hello" });
     const resumed = adapter.resumeInvocation({ cwd: "/tmp/repo", prompt: "hello", providerSessionId: "s-1" });

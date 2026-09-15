@@ -61,6 +61,8 @@ export class ClaudeAdapter implements ProviderAdapter {
         "--permission-prompts",
         "none",
         "--verbose",
+        ...(input.model ? ["--model", input.model] : []),
+        ...(input.reasoning ? ["--effort", input.reasoning] : []),
         input.prompt,
       ],
       cwd: input.cwd,
