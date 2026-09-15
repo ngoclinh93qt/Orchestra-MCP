@@ -58,6 +58,27 @@ describe("TaskStore", () => {
     expect(child.parentId).toBe(parent.id);
   });
 
+  it("persists routing metadata on a child task", () => {
+    const store = freshStore();
+    const root = store.create({ provider: "codex", cwd: "/tmp/repo", promptBytes: 1, profileId: "codex-fast" });
+    const child = store.create({
+      provider: "claude", cwd: "/tmp/repo", promptBytes: 2, parentId: root.id,
+      profileId: "claude-review", routingRootId: root.id, routingAttempt: 1, switchReason: "quota",
+    });
+    expect(store.get(child.id)).toMatchObject({
+      profileId: "claude-review", routingRootId: root.id, routingAttempt: 1, switchReason: "quota",
+    });
+  });
+
+  it("approves a routing proposal exactly once without storing a prompt", () => {
+    const store = freshStore();
+    const task = store.create({ provider: "codex", cwd: "/tmp/repo", promptBytes: 1 });
+    const proposal = store.createProposal({ sourceTaskId: task.id, targetProfileId: "claude-review", reason: "manual" });
+    expect(JSON.stringify(proposal)).not.toContain("prompt");
+    expect(store.approveProposal(proposal.id)?.state).toBe("approved");
+    expect(store.approveProposal(proposal.id)).toBeUndefined();
+  });
+
   it("filters and lists tasks newest first", () => {
     const store = freshStore();
     const a = store.create({ provider: "codex", cwd: "/tmp/repo", promptBytes: 1 });

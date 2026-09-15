@@ -46,6 +46,10 @@ export interface BridgeTask {
   readonly providerSessionId: string | null;
   readonly exitCode: number | null;
   readonly errorSummary: string | null;
+  readonly profileId: string | null;
+  readonly routingRootId: string | null;
+  readonly routingAttempt: number;
+  readonly switchReason: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -55,7 +59,14 @@ export interface CreateTaskInput {
   readonly cwd: string;
   readonly promptBytes: number;
   readonly parentId?: string | null;
+  readonly profileId?: string | null;
+  readonly routingRootId?: string | null;
+  readonly routingAttempt?: number;
+  readonly switchReason?: string | null;
 }
+
+export type RoutingProposalState = "pending" | "approved" | "rejected" | "expired";
+export interface RoutingProposal { readonly id: string; readonly sourceTaskId: string; readonly targetProfileId: string; readonly reason: string; readonly state: RoutingProposalState; readonly createdAt: string; readonly updatedAt: string }
 
 export interface TransitionOptions {
   readonly providerSessionId?: string | null;
