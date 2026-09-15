@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Stops and unloads both LaunchAgents and removes their plist files. Never touches the bridge's
-# state directory (database, event logs), the Codex/Claude session stores, or the Cloudflare
-# tunnel credentials file — rollback is recoverable, not destructive.
+# Stops and unloads the bridge and any legacy managed Cloudflare tunnel plist. Never touches the
+# bridge's state directory (database, event logs), the Codex/Claude session stores, or ingress
+# provider credentials — rollback is recoverable, not destructive.
 #
 # Override LAUNCH_AGENTS_DIR to target a directory other than the real ~/Library/LaunchAgents
 # (used by tests).
@@ -20,4 +20,4 @@ for LABEL in "${LABELS[@]}"; do
   fi
 done
 
-echo "Services stopped and unloaded. Database, logs, and Cloudflare tunnel credentials were left untouched."
+echo "Services stopped and unloaded. Database, logs, and ingress-provider credentials were left untouched."

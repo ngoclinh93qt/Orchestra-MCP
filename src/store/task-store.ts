@@ -8,6 +8,7 @@ import {
   type ListFilter,
   type TaskState,
   type TransitionOptions,
+  type RoutingProposal,
 } from "../domain/task.js";
 import { IllegalTaskTransitionError, TaskNotFoundError } from "../errors.js";
 import { runMigrations } from "./migrations.js";
@@ -22,6 +23,7 @@ interface TaskRow {
   provider_session_id: string | null;
   exit_code: number | null;
   error_summary: string | null;
+  profile_id: string | null; routing_root_id: string | null; routing_attempt: number; switch_reason: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -37,6 +39,7 @@ function rowToTask(row: TaskRow): BridgeTask {
     providerSessionId: row.provider_session_id,
     exitCode: row.exit_code,
     errorSummary: row.error_summary,
+    profileId: row.profile_id, routingRootId: row.routing_root_id, routingAttempt: row.routing_attempt, switchReason: row.switch_reason,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -67,16 +70,29 @@ export class TaskStore {
       providerSessionId: null,
       exitCode: null,
       errorSummary: null,
+      profileId: input.profileId ?? null, routingRootId: input.routingRootId ?? null, routingAttempt: input.routingAttempt ?? 0, switchReason: input.switchReason ?? null,
       createdAt: now,
       updatedAt: now,
     };
     this.db
       .prepare(
-        `INSERT INTO tasks (id, provider, cwd, prompt_bytes, state, parent_id, provider_session_id, exit_code, error_summary, created_at, updated_at)
-         VALUES (@id, @provider, @cwd, @promptBytes, @state, @parentId, @providerSessionId, @exitCode, @errorSummary, @createdAt, @updatedAt)`,
+        `INSERT INTO tasks (id, provider, cwd, prompt_bytes, state, parent_id, provider_session_id, exit_code, error_summary, profile_id, routing_root_id, routing_attempt, switch_reason, created_at, updated_at)
+         VALUES (@id, @provider, @cwd, @promptBytes, @state, @parentId, @providerSessionId, @exitCode, @errorSummary, @profileId, @routingRootId, @routingAttempt, @switchReason, @createdAt, @updatedAt)`,
       )
       .run(task);
     return task;
+  }
+
+  createProposal(input: { sourceTaskId: string; targetProfileId: string; reason: string }): RoutingProposal {
+    const now = new Date().toISOString(); const proposal: RoutingProposal = { id: randomUUID(), ...input, state: "pending", createdAt: now, updatedAt: now };
+    this.db.prepare(`INSERT INTO routing_proposals (id, source_task_id, target_profile_id, reason, state, created_at, updated_at) VALUES (@id, @sourceTaskId, @targetProfileId, @reason, @state, @createdAt, @updatedAt)`).run(proposal);
+    return proposal;
+  }
+
+  approveProposal(id: string): RoutingProposal | undefined {
+    const now = new Date().toISOString();
+    const result = this.db.prepare(`UPDATE routing_proposals SET state = 'approved', updated_at = @now WHERE id = @id AND state = 'pending' RETURNING id, source_task_id AS sourceTaskId, target_profile_id AS targetProfileId, reason, state, created_at AS createdAt, updated_at AS updatedAt`).get({ id, now }) as RoutingProposal | undefined;
+    return result;
   }
 
   get(id: string): BridgeTask | undefined {

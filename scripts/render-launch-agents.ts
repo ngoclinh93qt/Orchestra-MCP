@@ -14,7 +14,10 @@ export interface RenderOptions {
   readonly publicUrl: string;
   readonly cloudflaredBin: string;
   readonly cloudflaredConfig: string;
+  readonly ingress: IngressProfile;
 }
+
+export type IngressProfile = "cloudflare" | "external";
 
 export interface RenderedPlist {
   readonly label: string;
@@ -31,10 +34,16 @@ const TEMPLATES: readonly Template[] = [
   { file: "local.agent-bridge.tunnel.plist.template", label: "local.agent-bridge.tunnel" },
 ];
 
+export function parseIngressProfile(value: string | undefined): IngressProfile {
+  const profile = value ?? "cloudflare";
+  if (profile === "cloudflare" || profile === "external") return profile;
+  throw new Error(`AGENT_BRIDGE_INGRESS must be "cloudflare" or "external", got: ${profile}`);
+}
+
 /**
- * Renders both LaunchAgent plists from their templates into `targetDir`, writing each via a
- * temp file plus atomic rename so a reader never observes a half-written plist. Idempotent:
- * rendering twice into the same directory produces byte-identical output both times.
+ * Renders the bridge plist and, for the Cloudflare profile, its managed tunnel plist into
+ * `targetDir`. Each file is written via a temp file plus atomic rename so a reader never
+ * observes a half-written plist. Rendering twice produces byte-identical output.
  */
 export function renderPlists(options: RenderOptions): RenderedPlist[] {
   const substitutions: Readonly<Record<string, string>> = {
@@ -49,7 +58,8 @@ export function renderPlists(options: RenderOptions): RenderedPlist[] {
 
   mkdirSync(options.targetDir, { recursive: true });
 
-  return TEMPLATES.map((template) => {
+  const templates = options.ingress === "cloudflare" ? TEMPLATES : TEMPLATES.slice(0, 1);
+  return templates.map((template) => {
     const templatePath = join(options.templateDir, template.file);
     let content = readFileSync(templatePath, "utf8");
     for (const [placeholder, value] of Object.entries(substitutions)) {
@@ -95,6 +105,7 @@ function main(): void {
   const nodeBin = process.env.RENDER_NODE_BIN ?? process.execPath;
   const cloudflaredBin = process.env.RENDER_CLOUDFLARED_BIN ?? findCloudflaredBin();
   const cloudflaredConfig = process.env.RENDER_CLOUDFLARED_CONFIG ?? join(homedir(), ".cloudflared", "config.yml");
+  const ingress = parseIngressProfile(process.env.AGENT_BRIDGE_INGRESS);
 
   const results = renderPlists({
     templateDir: join(projectDir, "config"),
@@ -106,6 +117,7 @@ function main(): void {
     publicUrl: config.publicUrl.toString(),
     cloudflaredBin,
     cloudflaredConfig,
+    ingress,
   });
 
   for (const result of results) {

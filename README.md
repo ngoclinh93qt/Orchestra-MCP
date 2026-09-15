@@ -171,6 +171,19 @@ For the Cloudflare and LaunchAgent setup, see
 [docs/OPERATIONS.md](docs/OPERATIONS.md). For connecting ChatGPT, Codex CLI,
 or Claude Code, see [docs/CONNECT_CHATGPT.md](docs/CONNECT_CHATGPT.md).
 
+## Ingress profiles
+
+The bridge is always loopback-only; its ingress is a deployment concern rather
+than a dependency of the orchestration core.
+
+- `cloudflare` is the default managed profile. The installer starts both the
+  bridge and `cloudflared`.
+- `external` starts only the bridge. Use it when an operator-managed tunnel or
+  proxy — including OpenAI Secure MCP Tunnel — forwards to the local MCP URL.
+
+See [docs/TRANSPORTS.md](docs/TRANSPORTS.md) for Cloudflare, custom ingress,
+and OpenAI Secure MCP Tunnel setup.
+
 ## Access policy
 
 The owner edits one local file; a connected agent cannot change it:

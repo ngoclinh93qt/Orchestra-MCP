@@ -52,7 +52,7 @@ export class CodexAdapter implements ProviderAdapter {
   newInvocation(input: StartInput): ProviderInvocation {
     return {
       command: this.command,
-      args: ["exec", "--json", "--sandbox", "workspace-write", "-C", input.cwd, "-"],
+      args: ["exec", "--json", "--sandbox", "workspace-write", ...(input.model ? ["--model", input.model] : []), "-C", input.cwd, "-"],
       cwd: input.cwd,
       stdin: input.prompt,
       env: {},
