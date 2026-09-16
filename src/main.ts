@@ -85,10 +85,12 @@ async function main(): Promise<void> {
   }
 
   let auth: CreateAppAuthOptions | undefined;
-  const oauthProvider = oauthStore.isEnrolled() ? new BridgeOAuthProvider(oauthStore) : undefined;
+  const oauthProvider = config.authMode === "oauth" && oauthStore.isEnrolled()
+    ? new BridgeOAuthProvider(oauthStore)
+    : undefined;
   if (oauthProvider) {
     auth = { verifier: createCombinedVerifier(oauthStore, oauthProvider), requiredScopes: ["agent:read"] };
-  } else {
+  } else if (config.authMode === "oauth") {
     // eslint-disable-next-line no-console
     console.warn(
       "No owner enrolled yet: /mcp is unauthenticated. Run `npm run enroll-owner` before exposing this " +
@@ -105,8 +107,8 @@ async function main(): Promise<void> {
         ? {
             mountExtraRoutes: (mountedApp) =>
               mountAuth(mountedApp, oauthProvider, {
-                issuerUrl: config.publicUrl,
-                resourceServerUrl: config.publicUrl,
+                issuerUrl: config.publicUrl!,
+                resourceServerUrl: config.publicUrl!,
               }),
           }
         : {}),

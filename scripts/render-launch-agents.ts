@@ -106,6 +106,9 @@ function main(): void {
   const cloudflaredBin = process.env.RENDER_CLOUDFLARED_BIN ?? findCloudflaredBin();
   const cloudflaredConfig = process.env.RENDER_CLOUDFLARED_CONFIG ?? join(homedir(), ".cloudflared", "config.yml");
   const ingress = parseIngressProfile(process.env.AGENT_BRIDGE_INGRESS);
+  if (config.authMode !== "oauth") {
+    throw new Error("LaunchAgent rendering supports only OAuth deployments; run scripts/run-openai-tunnel.sh for OpenAI Secure MCP Tunnel.");
+  }
 
   const results = renderPlists({
     templateDir: join(projectDir, "config"),

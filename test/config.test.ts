@@ -14,6 +14,8 @@ describe("loadConfig", () => {
     });
     expect(config.host).toBe("127.0.0.1");
     expect(config.port).toBe(8787);
+    expect(config.authMode).toBe("oauth");
+    if (config.authMode !== "oauth") throw new Error("expected OAuth config");
     expect(config.publicUrl.href).toBe("https://mcp.example.com/mcp");
   });
 
@@ -23,6 +25,16 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ AGENT_BRIDGE_ALLOWED_ROOTS: "/Users/thief/nik" })).toThrow(
       "AGENT_BRIDGE_PUBLIC_URL",
     );
+  });
+
+  it("allows an OpenAI tunnel deployment without a public OAuth URL", () => {
+    const config = loadConfig({
+      AGENT_BRIDGE_ALLOWED_ROOTS: "/Users/thief/nik",
+      AGENT_BRIDGE_AUTH_MODE: "openai-tunnel",
+    });
+
+    expect(config.authMode).toBe("openai-tunnel");
+    expect(config.publicUrl).toBeUndefined();
   });
 
   it("rejects a non-loopback host", () => {

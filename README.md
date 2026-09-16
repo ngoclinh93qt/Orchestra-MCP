@@ -91,6 +91,10 @@ The connected client is not trusted to decide what it may reach.
 - **OAuth and scopes.** Enrolled deployments use OAuth 2.1 with PKCE, dynamic
   client registration, rotating refresh tokens, and `agent:read` /
   `agent:write` scopes. Loopback clients can use a local bearer token.
+- **OpenAI Secure MCP Tunnel.** Its broker is an alternative connection
+  boundary: run it in `openai-tunnel` mode and choose **No authentication**
+  when connecting in ChatGPT. This mode remains loopback-only and does not
+  expose the bridge's HTTP OAuth endpoints.
 - **Secret-safe persistence.** Authorization codes, OAuth tokens, the recovery
   code, and local bearer token are stored as SHA-256 hashes.
 - **Redaction before egress.** Repository content, provider session history,

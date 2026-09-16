@@ -4,7 +4,7 @@ import { isAbsolute, resolve } from "node:path";
 import { PathNotAllowedError } from "./errors.js";
 import { containsPath, isDeniedPath, type FilesPolicy } from "./policy/files-policy.js";
 
-export type BridgeConfig = Readonly<{
+type BridgeConfigBase = {
   host: "127.0.0.1";
   port: number;
   stateDir: string;
@@ -14,11 +14,15 @@ export type BridgeConfig = Readonly<{
    * never consulted again. Empty when the variable is unset.
    */
   seedAllowedRoots: readonly string[];
-  publicUrl: URL;
   maxConcurrentTotal: number;
   maxConcurrentPerProvider: number;
   maxPromptBytes: number;
-}>;
+};
+
+export type BridgeConfig = Readonly<BridgeConfigBase & (
+  | { authMode: "oauth"; publicUrl: URL }
+  | { authMode: "openai-tunnel"; publicUrl: undefined }
+)>;
 
 function positiveInteger(value: string | undefined, fallback: number, name: string): number {
   const parsed = value === undefined ? fallback : Number(value);
@@ -33,26 +37,30 @@ export function loadConfig(env: NodeJS.ProcessEnv): BridgeConfig {
   if (roots.some((root) => !isAbsolute(root))) {
     throw new Error("AGENT_BRIDGE_ALLOWED_ROOTS must contain absolute paths");
   }
-  // Deliberately no default. This value is the OAuth issuer and resource identifier as well as
-  // the address clients connect to; a placeholder default would let a misconfigured deployment
-  // start and then advertise someone else's identity to its clients.
-  if (!env.AGENT_BRIDGE_PUBLIC_URL) {
+  const authMode = env.AGENT_BRIDGE_AUTH_MODE ?? "oauth";
+  if (authMode !== "oauth" && authMode !== "openai-tunnel") {
+    throw new Error("AGENT_BRIDGE_AUTH_MODE must be oauth or openai-tunnel");
+  }
+  // Deliberately no default. In OAuth mode this value is the issuer and resource identifier as
+  // well as the address clients connect to; a placeholder would advertise someone else's identity.
+  const publicUrl = env.AGENT_BRIDGE_PUBLIC_URL ? new URL(env.AGENT_BRIDGE_PUBLIC_URL) : undefined;
+  if (authMode === "oauth" && !publicUrl) {
     throw new Error("AGENT_BRIDGE_PUBLIC_URL must be set to this bridge's public HTTPS /mcp endpoint (see .env.example)");
   }
-  const publicUrl = new URL(env.AGENT_BRIDGE_PUBLIC_URL);
-  if (publicUrl.protocol !== "https:" || publicUrl.pathname !== "/mcp") {
+  if (publicUrl && (publicUrl.protocol !== "https:" || publicUrl.pathname !== "/mcp")) {
     throw new Error("Public URL must be an HTTPS /mcp endpoint");
   }
-  return Object.freeze({
+  const base = {
     host,
     port: positiveInteger(env.AGENT_BRIDGE_PORT, 8787, "AGENT_BRIDGE_PORT"),
     stateDir: resolve(env.AGENT_BRIDGE_STATE_DIR ?? `${homedir()}/Library/Application Support/Agent Bridge MCP`),
     seedAllowedRoots: Object.freeze([...roots]),
-    publicUrl,
     maxConcurrentTotal: positiveInteger(env.AGENT_BRIDGE_MAX_CONCURRENT_TOTAL, 2, "max total concurrency"),
     maxConcurrentPerProvider: positiveInteger(env.AGENT_BRIDGE_MAX_CONCURRENT_PER_PROVIDER, 1, "max provider concurrency"),
     maxPromptBytes: positiveInteger(env.AGENT_BRIDGE_MAX_PROMPT_BYTES, 131072, "max prompt bytes"),
-  });
+  } as const;
+  if (authMode === "openai-tunnel") return Object.freeze({ ...base, authMode, publicUrl: undefined });
+  return Object.freeze({ ...base, authMode, publicUrl: publicUrl! });
 }
 
 /**
