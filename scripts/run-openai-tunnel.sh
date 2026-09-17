@@ -39,9 +39,18 @@ npm run build
 
 CONTROL_PLANE_API_KEY="$(cat "$SECRET_FILE")"
 export CONTROL_PLANE_API_KEY
-# Secure MCP Tunnel owns the remote connection boundary, so this local bridge
-# intentionally does not expose its separate HTTP OAuth provider.
-AGENT_BRIDGE_AUTH_MODE=openai-tunnel node --env-file=.env dist/main.js &
+# Read only this non-secret setting with Node's dotenv parser rather than
+# sourcing .env as shell code. An explicit shell value overrides .env.
+AUTH_MODE="$(node --env-file=.env -p 'process.env.AGENT_BRIDGE_AUTH_MODE ?? "oauth"')"
+case "$AUTH_MODE" in
+  oauth|openai-tunnel) ;;
+  *)
+    echo "AGENT_BRIDGE_AUTH_MODE must be oauth or openai-tunnel, got: $AUTH_MODE" >&2
+    exit 1
+    ;;
+esac
+
+AGENT_BRIDGE_AUTH_MODE="$AUTH_MODE" node --env-file=.env dist/main.js &
 BRIDGE_PID="$!"
 
 for _ in {1..30}; do

@@ -184,7 +184,7 @@ time because both expect to reach the same local bridge port.
 | Use case | Choose | Authentication |
 |---|---|---|
 | A stable public MCP URL for ChatGPT, Codex, Claude Code, or non-OpenAI clients | Cloudflare Tunnel | Bridge OAuth + recovery code |
-| A private server reachable only from OpenAI products | OpenAI Secure MCP Tunnel | OpenAI tunnel access; no bridge HTTP OAuth |
+| A private server reachable only from OpenAI products | OpenAI Secure MCP Tunnel | OAuth by default, or tunnel-only authentication explicitly |
 
 ### Cloudflare Tunnel — public HTTPS endpoint
 
@@ -232,10 +232,36 @@ distribution.
    tunnel-client doctor --profile agent-bridge --explain
    ```
 
-3. Create `.env` with your initial allowlist. A public URL is not needed in
-   this mode:
+3. Choose the bridge authentication mode in `.env`:
 
    ```dotenv
+   AGENT_BRIDGE_ALLOWED_ROOTS=/Users/you/projects
+
+   # Default: OAuth. This public URL must route every bridge OAuth endpoint.
+   AGENT_BRIDGE_AUTH_MODE=oauth
+   AGENT_BRIDGE_PUBLIC_URL=https://mcp.example.com/mcp
+   ```
+
+   For OAuth, make the public hostname forward `/mcp`,
+   `/.well-known/oauth-protected-resource/mcp`,
+   `/.well-known/oauth-authorization-server`, `/authorize`, `/token`, and
+   `/revoke` to the bridge. A Cloudflare named tunnel can provide this public
+   issuer while OpenAI Tunnel carries the private MCP connection. In that
+   combination, start Cloudflare by itself instead of
+   `scripts/install-services.sh`, which would start a second bridge:
+
+   ```bash
+   cloudflared --config ~/.cloudflared/config.yml tunnel run
+   ```
+
+   Run `npm run enroll-owner` once and save its recovery code; it is the code
+   a user enters in the browser to authorize an OAuth connection.
+
+   To intentionally run without bridge HTTP OAuth, use this instead and omit
+   `AGENT_BRIDGE_PUBLIC_URL`:
+
+   ```dotenv
+   AGENT_BRIDGE_AUTH_MODE=openai-tunnel
    AGENT_BRIDGE_ALLOWED_ROOTS=/Users/you/projects
    ```
 
@@ -250,19 +276,21 @@ distribution.
    scripts/run-openai-tunnel.sh
    ```
 
-   The launcher sets `AGENT_BRIDGE_AUTH_MODE=openai-tunnel` itself, starts the
-   bridge and `tunnel-client`, and stops both on `Ctrl+C`. Check the local
-   tunnel UI at `http://127.0.0.1:8080/ui` or its readiness endpoint at
+   The launcher reads `AGENT_BRIDGE_AUTH_MODE` from `.env`, starts the bridge
+   and `tunnel-client`, and stops both on `Ctrl+C`. Check the local tunnel UI
+   at `http://127.0.0.1:8080/ui` or its readiness endpoint at
    `http://127.0.0.1:8080/readyz`.
 
 5. In ChatGPT developer mode, create an app, choose **Tunnel**, and select the
-   associated tunnel. If the UI asks for an authentication method, choose
-   **No authentication**: the OpenAI tunnel is the connection boundary for
-   this mode, and the bridge's HTTP OAuth endpoints are intentionally off.
+   associated tunnel. With `oauth`, choose **OAuth** when the setup UI offers
+   it, complete the browser authorization, and enter the recovery code from
+   `npm run enroll-owner`. With `openai-tunnel`, choose **No authentication**:
+   the OpenAI tunnel is then the connection boundary and bridge HTTP OAuth is
+   intentionally off.
 
 Never commit the runtime API key, `tunnel-client.env`, or the profile's secret
 material. For current product availability, required tunnel permissions, and
-supported OpenAI surfaces, see the [official OpenAI Secure MCP Tunnel guide](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels).
+supported OpenAI surfaces, see the [official OpenAI Secure MCP Tunnel guide](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels). OpenAI notes that the browser-facing authorization server is not automatically tunneled, so OAuth needs the separately reachable public issuer described above.
 
 ## Ingress profiles
 

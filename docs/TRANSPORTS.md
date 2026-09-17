@@ -64,15 +64,22 @@ for current availability, permissions, and billing.
 
 ### Bridge authentication mode
 
-Use `scripts/run-openai-tunnel.sh` for this repository's OpenAI tunnel setup.
-It starts the bridge with `AGENT_BRIDGE_AUTH_MODE=openai-tunnel`, so the
-bridge does not require `AGENT_BRIDGE_PUBLIC_URL` or mount HTTP OAuth routes.
-The OpenAI-hosted tunnel is the connection boundary; select **No
-authentication** if the ChatGPT setup UI asks for an authentication method.
+`oauth` is the default, including when `scripts/run-openai-tunnel.sh` starts
+the bridge. Set `AGENT_BRIDGE_PUBLIC_URL` to a public HTTPS `/mcp` URL and
+route the bridge's MCP and OAuth endpoints through that public issuer. Users
+connect with OAuth and enter the owner recovery code printed by
+`npm run enroll-owner`.
 
-This differs from a generic external public proxy. If a proxy exposes the
-bridge on a public HTTPS hostname, keep the default OAuth mode and make its
-OAuth issuer and authorization routes reachable end to end.
+For a fully private OpenAI-only setup, set
+`AGENT_BRIDGE_AUTH_MODE=openai-tunnel`. The bridge then does not require
+`AGENT_BRIDGE_PUBLIC_URL` or mount HTTP OAuth routes; select **No
+authentication** if the ChatGPT setup UI asks. The OpenAI-hosted tunnel is the
+connection boundary in this mode.
+
+OpenAI documents that an OAuth authorization server is not automatically
+tunneled. Therefore OAuth requires a separately reachable public issuer,
+such as the Cloudflare named tunnel described above, even when OpenAI Tunnel
+is also used for the MCP transport.
 
 ## Removing an ingress
 
