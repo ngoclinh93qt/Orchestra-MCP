@@ -5,6 +5,8 @@ export type ProviderEvent = Readonly<Record<string, unknown>>;
 export interface StartInput {
   readonly cwd: string;
   readonly prompt: string;
+  readonly model?: string;
+  readonly reasoning?: string;
 }
 
 export interface ContinueInput {

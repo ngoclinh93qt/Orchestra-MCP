@@ -73,6 +73,19 @@ const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    version: 3,
+    sql: `
+      ALTER TABLE tasks ADD COLUMN profile_id TEXT;
+      ALTER TABLE tasks ADD COLUMN routing_root_id TEXT;
+      ALTER TABLE tasks ADD COLUMN routing_attempt INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE tasks ADD COLUMN switch_reason TEXT;
+      CREATE TABLE routing_proposals (
+        id TEXT PRIMARY KEY, source_task_id TEXT NOT NULL, target_profile_id TEXT NOT NULL,
+        reason TEXT NOT NULL, state TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+    `,
+  },
 ];
 
 /** Applies pending schema migrations transactionally, in order, tracked by version. */
