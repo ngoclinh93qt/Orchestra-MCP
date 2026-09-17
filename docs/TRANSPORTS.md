@@ -62,13 +62,17 @@ for current availability, permissions, and billing.
 6. In ChatGPT developer mode, choose **Tunnel** as the connection type and
    select the associated tunnel.
 
-### OAuth caveat
+### Bridge authentication mode
 
-The tunnel can carry MCP discovery, but OpenAI documents that it does not
-automatically make a browser-facing OAuth authorization server reachable. The
-OAuth issuer configured by `AGENT_BRIDGE_PUBLIC_URL` must still be reachable
-for the chosen client authorization flow. Test enrollment and token refresh
-before relying on this profile for production access.
+Use `scripts/run-openai-tunnel.sh` for this repository's OpenAI tunnel setup.
+It starts the bridge with `AGENT_BRIDGE_AUTH_MODE=openai-tunnel`, so the
+bridge does not require `AGENT_BRIDGE_PUBLIC_URL` or mount HTTP OAuth routes.
+The OpenAI-hosted tunnel is the connection boundary; select **No
+authentication** if the ChatGPT setup UI asks for an authentication method.
+
+This differs from a generic external public proxy. If a proxy exposes the
+bridge on a public HTTPS hostname, keep the default OAuth mode and make its
+OAuth issuer and authorization routes reachable end to end.
 
 ## Removing an ingress
 

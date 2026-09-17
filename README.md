@@ -175,6 +175,95 @@ For the Cloudflare and LaunchAgent setup, see
 [docs/OPERATIONS.md](docs/OPERATIONS.md). For connecting ChatGPT, Codex CLI,
 or Claude Code, see [docs/CONNECT_CHATGPT.md](docs/CONNECT_CHATGPT.md).
 
+## Remote access: choose one tunnel
+
+The bridge itself always binds to `127.0.0.1`. Choose **one** ingress path;
+do not run the Cloudflare LaunchAgent and `run-openai-tunnel.sh` at the same
+time because both expect to reach the same local bridge port.
+
+| Use case | Choose | Authentication |
+|---|---|---|
+| A stable public MCP URL for ChatGPT, Codex, Claude Code, or non-OpenAI clients | Cloudflare Tunnel | Bridge OAuth + recovery code |
+| A private server reachable only from OpenAI products | OpenAI Secure MCP Tunnel | OpenAI tunnel access; no bridge HTTP OAuth |
+
+### Cloudflare Tunnel — public HTTPS endpoint
+
+Use this when you need a stable hostname such as
+`https://mcp.example.com/mcp`. It is the default managed ingress profile.
+
+```bash
+# .env: use your hostname and initial folder allowlist
+AGENT_BRIDGE_INGRESS=cloudflare
+AGENT_BRIDGE_PUBLIC_URL=https://mcp.example.com/mcp
+AGENT_BRIDGE_ALLOWED_ROOTS=/Users/you/projects
+
+scripts/install-cloudflared.sh
+cloudflared tunnel login
+cloudflared tunnel create agent-bridge
+cp config/cloudflared.example.yml ~/.cloudflared/config.yml
+# Edit that file with the tunnel ID and credentials-file path printed above.
+cloudflared tunnel route dns agent-bridge mcp.example.com
+
+npm run enroll-owner
+scripts/install-services.sh
+```
+
+The generated Cloudflare config forwards only to the loopback bridge and ends
+with a 404 catch-all. In ChatGPT, add the custom MCP URL and complete the
+OAuth flow using the recovery code printed by `npm run enroll-owner`. Keep the
+Cloudflare credentials JSON and recovery code out of the repository.
+
+### OpenAI Secure MCP Tunnel — private outbound connection
+
+Use this when the bridge must not have a public URL. The tunnel client opens
+outbound HTTPS to OpenAI, while the bridge remains bound to loopback. This
+path is intended for supported OpenAI products, not public plugin
+distribution.
+
+1. In [OpenAI Platform tunnel settings](https://platform.openai.com/settings/organization/tunnels), create a tunnel and associate it with the target Platform organization and ChatGPT workspace.
+2. Install `tunnel-client`, then initialize a profile that targets the local bridge:
+
+   ```bash
+   export CONTROL_PLANE_API_KEY="<runtime API key>"
+   tunnel-client init \
+     --profile agent-bridge \
+     --tunnel-id "<tunnel id>" \
+     --mcp-server-url http://127.0.0.1:8787/mcp
+   tunnel-client doctor --profile agent-bridge --explain
+   ```
+
+3. Create `.env` with your initial allowlist. A public URL is not needed in
+   this mode:
+
+   ```dotenv
+   AGENT_BRIDGE_ALLOWED_ROOTS=/Users/you/projects
+   ```
+
+4. Store the runtime key outside the checkout with owner-only permissions,
+   then start both processes together:
+
+   ```bash
+   STATE_DIR="$HOME/Library/Application Support/Agent Bridge MCP"
+   install -d -m 700 "$STATE_DIR"
+   umask 077
+   printf '%s\n' "$CONTROL_PLANE_API_KEY" > "$STATE_DIR/tunnel-client.env"
+   scripts/run-openai-tunnel.sh
+   ```
+
+   The launcher sets `AGENT_BRIDGE_AUTH_MODE=openai-tunnel` itself, starts the
+   bridge and `tunnel-client`, and stops both on `Ctrl+C`. Check the local
+   tunnel UI at `http://127.0.0.1:8080/ui` or its readiness endpoint at
+   `http://127.0.0.1:8080/readyz`.
+
+5. In ChatGPT developer mode, create an app, choose **Tunnel**, and select the
+   associated tunnel. If the UI asks for an authentication method, choose
+   **No authentication**: the OpenAI tunnel is the connection boundary for
+   this mode, and the bridge's HTTP OAuth endpoints are intentionally off.
+
+Never commit the runtime API key, `tunnel-client.env`, or the profile's secret
+material. For current product availability, required tunnel permissions, and
+supported OpenAI surfaces, see the [official OpenAI Secure MCP Tunnel guide](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels).
+
 ## Ingress profiles
 
 The bridge is always loopback-only; its ingress is a deployment concern rather
