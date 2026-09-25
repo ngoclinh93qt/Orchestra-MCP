@@ -31,6 +31,7 @@ interface ActiveEntry {
 
 export interface StartRequest {
   readonly provider: Provider;
+  readonly model?: string;
   readonly cwd: string;
   readonly prompt: string;
 }
@@ -97,7 +98,11 @@ export class JobSupervisor {
     this.assertConcurrencyAvailable(request.provider);
 
     const task = this.options.taskStore.create({ provider: request.provider, cwd, promptBytes });
-    this.spawnFor(task, adapter, adapter.newInvocation({ cwd, prompt: request.prompt }));
+    this.spawnFor(task, adapter, adapter.newInvocation({
+      cwd,
+      prompt: request.prompt,
+      ...(request.model !== undefined ? { model: request.model } : {}),
+    }));
     return task;
   }
 

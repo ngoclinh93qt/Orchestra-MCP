@@ -107,6 +107,12 @@ Agents run with a minimal environment — `HOME`, `USER`, locale, and a PATH
 that adds the bridge's own Node directory, `~/.local/bin`, and Homebrew — and
 nothing else from the bridge's environment.
 
+When calling `agent_start`, pass `model` to select a provider-supported model,
+for example `{ "provider": "codex", "model": "gpt-5.6-luna", "cwd": "/path/to/repo", "prompt": "..." }`.
+For Claude Code, use its model identifier with `provider: "claude"`. If omitted,
+the provider CLI chooses its configured default. `agent_continue` resumes the
+existing provider session, so it does not accept a separate model selection.
+
 Two things the bridge cannot fix for you:
 
 - Each CLI must be logged in on this Mac (`claude auth status`, `codex login

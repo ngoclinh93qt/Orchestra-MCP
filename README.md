@@ -74,7 +74,7 @@ ask for approval before they run.
 | Tasks | `agent_list` | Read | List bridge tasks by provider or state. |
 | Tasks | `agent_status` | Read | Get the state of one task. |
 | Tasks | `agent_output` | Read | Read paginated, redacted task events. |
-| Tasks | `agent_start` | Write | Start a Codex or Claude Code task. |
+| Tasks | `agent_start` | Write | Start a Codex or Claude Code task, optionally selecting a model. |
 | Tasks | `agent_continue` | Write | Continue a finished or waiting task. |
 | Tasks | `agent_cancel` | Write | Cancel a running task. |
 

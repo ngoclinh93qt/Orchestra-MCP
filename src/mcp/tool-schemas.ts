@@ -42,7 +42,7 @@ export interface ToolDefinition {
 
 /**
  * The complete, deliberately small MCP tool surface. There is no run_shell, arbitrary
- * executable, environment, model, sandbox-bypass, download, or delete-log tool: only these eleven.
+ * executable, environment, sandbox-bypass, download, or delete-log tool: only these eleven.
  */
 export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
@@ -50,6 +50,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     description: "Start a new Codex or Claude Code task in an allowlisted local working directory.",
     inputSchema: {
       provider: z.enum(["codex", "claude"]),
+      model: z.string().trim().min(1).optional().describe("Optional provider model ID; omit to use the CLI default"),
       cwd: z.string().min(1).describe("Absolute path to the working directory"),
       prompt: z.string().min(1),
     },

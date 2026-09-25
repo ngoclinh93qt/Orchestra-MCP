@@ -211,7 +211,7 @@ The bridge passes a minimal inherited environment plus an explicit allowlist.
 It never returns environment variables. Provider credentials remain in their
 existing local stores and are not copied into bridge configuration.
 
-Concurrency defaults to one task per provider and two total. Prompts have a
+Concurrency defaults to two tasks per provider and four total. Prompts have a
 size limit, output is paginated, and logs have rotation/retention limits.
 
 ## 8. Authentication

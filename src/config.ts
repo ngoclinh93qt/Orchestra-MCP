@@ -55,8 +55,8 @@ export function loadConfig(env: NodeJS.ProcessEnv): BridgeConfig {
     port: positiveInteger(env.AGENT_BRIDGE_PORT, 8787, "AGENT_BRIDGE_PORT"),
     stateDir: resolve(env.AGENT_BRIDGE_STATE_DIR ?? `${homedir()}/Library/Application Support/Agent Bridge MCP`),
     seedAllowedRoots: Object.freeze([...roots]),
-    maxConcurrentTotal: positiveInteger(env.AGENT_BRIDGE_MAX_CONCURRENT_TOTAL, 2, "max total concurrency"),
-    maxConcurrentPerProvider: positiveInteger(env.AGENT_BRIDGE_MAX_CONCURRENT_PER_PROVIDER, 1, "max provider concurrency"),
+    maxConcurrentTotal: positiveInteger(env.AGENT_BRIDGE_MAX_CONCURRENT_TOTAL, 4, "max total concurrency"),
+    maxConcurrentPerProvider: positiveInteger(env.AGENT_BRIDGE_MAX_CONCURRENT_PER_PROVIDER, 2, "max provider concurrency"),
     maxPromptBytes: positiveInteger(env.AGENT_BRIDGE_MAX_PROMPT_BYTES, 131072, "max prompt bytes"),
   } as const;
   if (authMode === "openai-tunnel") return Object.freeze({ ...base, authMode, publicUrl: undefined });

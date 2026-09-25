@@ -105,6 +105,7 @@ export function toSummary(task: BridgeTask): TaskSummary {
 
 export interface AgentStartArgs {
   readonly provider: Provider;
+  readonly model?: string;
   readonly cwd: string;
   readonly prompt: string;
 }
